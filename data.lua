@@ -4,7 +4,7 @@ data:extend({
     type = "custom-input",
     name = "quick-mall-open",
     key_sequence = "CONTROL + M",
-    consuming = "script-only",
+    consuming = "none",
   },
   {
     type = "shortcut",
