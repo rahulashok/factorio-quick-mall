@@ -415,7 +415,7 @@ local function build_layout_placements(center, building_name, input_chest, outpu
     { name = input_chest, position = { x = center.x - chest_offset, y = center.y } },
     { name = output_chest, position = { x = center.x + chest_offset, y = center.y } },
     { name = inserter_name, position = { x = center.x - inserter_offset, y = center.y }, direction = defines.direction.east },
-    { name = inserter_name, position = { x = center.x + inserter_offset, y = center.y }, direction = defines.direction.west },
+    { name = inserter_name, position = { x = center.x + inserter_offset, y = center.y }, direction = defines.direction.east },
   }
 end
 
@@ -448,6 +448,7 @@ local function build_blueprint_entities(
   add_entity({
     name = input_chest,
     position = { x = base_position.x - chest_offset, y = base_position.y },
+    is_input_chest = true,
   })
 
   add_entity({
@@ -458,7 +459,7 @@ local function build_blueprint_entities(
   add_entity({
     name = inserter_name,
     position = { x = base_position.x - inserter_offset, y = base_position.y },
-    direction = defines.direction.east,
+    direction = defines.direction.west,
   })
 
   add_entity({
