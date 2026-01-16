@@ -19,6 +19,7 @@ local STATIC_BUILDING_CANDIDATES = {
   { name = "chemical-plant", label = "Chemical Plant" },
   { name = "oil-refinery", label = "Oil Refinery" },
   { name = "foundry", label = "Foundry" },
+  { name = "em-plant", label = "EM Plant" },
 }
 
 local INPUT_CHEST_CANDIDATES = {
@@ -375,13 +376,14 @@ end
 
 local function get_item_requests(recipe)
   local requests = {}
-
+  index = 1
   for _, ingredient in pairs(recipe.ingredients or {}) do
     local ingredient_type = ingredient.type or "item"
     if ingredient_type == "item" then
       local amount = ingredient.amount or ingredient.amount_max or ingredient.amount_min or 1
       local count = math.max(1, math.ceil(amount))
-      table.insert(requests, { name = ingredient.name, count = count })
+      table.insert(requests, { index = index, name = ingredient.name, count = count, quality = "normal", comparator = "=" })
+      index = index + 1
     end
   end
 
@@ -413,9 +415,9 @@ local function build_layout_placements(center, building_name, input_chest, outpu
   return {
     { name = building_name, position = center, direction = defines.direction.north },
     { name = input_chest, position = { x = center.x - chest_offset, y = center.y } },
-    { name = output_chest, position = { x = center.x + chest_offset, y = center.y } },
+    { name = output_chest, position = { x = center.x - chest_offset, y = center.y + 1 } },
     { name = inserter_name, position = { x = center.x - inserter_offset, y = center.y }, direction = defines.direction.east },
-    { name = inserter_name, position = { x = center.x + inserter_offset, y = center.y }, direction = defines.direction.east },
+    { name = inserter_name, position = { x = center.x - inserter_offset, y = center.y + 1 }, direction = defines.direction.west },
   }
 end
 
@@ -427,10 +429,25 @@ local function build_blueprint_entities(
   output_chest,
   inserter_name,
   chest_offset,
-  inserter_offset
+  inserter_offset,
+  request_list
 )
   local entities = {}
   local next_id = 1
+
+  local request_filters = nil
+  if request_list then
+    request_filters = {}
+    for index, request in ipairs(request_list) do
+      request_filters[index] = {
+        index = index,
+        name = request.name,
+        count = request.count,
+        quality = request.quality,
+        comparator = request.comparator,
+      }
+    end
+  end
 
   local function add_entity(def)
     def.entity_number = next_id
@@ -443,17 +460,25 @@ local function build_blueprint_entities(
     position = { x = base_position.x, y = base_position.y },
     direction = defines.direction.north,
     recipe = recipe_name,
+    tags = { quick_mall_recipe = recipe_name },
   })
 
   add_entity({
     name = input_chest,
     position = { x = base_position.x - chest_offset, y = base_position.y },
-    is_input_chest = true,
+    request_filters = {
+      sections = {
+          {
+              index = 1,
+              filters = request_filters
+          }
+      }
+  },    
   })
 
   add_entity({
     name = output_chest,
-    position = { x = base_position.x + chest_offset, y = base_position.y },
+    position = { x = base_position.x - chest_offset, y = base_position.y + 1 },
   })
 
   add_entity({
@@ -464,8 +489,8 @@ local function build_blueprint_entities(
 
   add_entity({
     name = inserter_name,
-    position = { x = base_position.x + inserter_offset, y = base_position.y },
-    direction = defines.direction.west,
+    position = { x = base_position.x - inserter_offset, y = base_position.y + 1 },
+    direction = defines.direction.east,
   })
 
   return entities
@@ -479,40 +504,6 @@ local function validate_entity_names(names)
     end
   end
   return missing
-end
-
-local function apply_request_filters_to_blueprint(stack, entities, request_list)
-  if not (stack and stack.valid_for_read and stack.is_blueprint and request_list) then
-    return
-  end
-
-  local blueprint_entities = stack.get_blueprint_entities()
-  if not blueprint_entities then
-    return
-  end
-
-  local input_chest_entity = nil
-  for _, entity in ipairs(blueprint_entities) do
-    if entities[entity.entity_number] and entities[entity.entity_number].is_input_chest then
-      input_chest_entity = entity
-      break
-    end
-  end
-
-  if not input_chest_entity then
-    return
-  end
-
-  input_chest_entity.request_filters = {}
-  for index, request in ipairs(request_list) do
-    input_chest_entity.request_filters[index] = {
-      index = index,
-      name = request.name,
-      count = request.count,
-    }
-  end
-
-  stack.set_blueprint_entities(blueprint_entities)
 end
 
 local function give_blueprint_cursor(player, entities, request_list)
@@ -549,36 +540,11 @@ local function give_blueprint_cursor(player, entities, request_list)
     end
 
     stack.set_blueprint_entities(entities)
-    apply_request_filters_to_blueprint(stack, entities, request_list)
     return true
   end
 
   if set_blueprint_on_stack(player.cursor_stack) then
     return true
-  end
-
-  local inventory = player.get_main_inventory and player.get_main_inventory()
-  if inventory and inventory.valid then
-    local inserted = inventory.insert({ name = "blueprint", count = 1 })
-    if inserted > 0 then
-      local stack = inventory.find_item_stack("blueprint")
-      if stack and stack.valid then
-        local missing = validate_entity_names({
-          entities[1].name,
-          entities[2].name,
-          entities[3].name,
-          entities[4].name,
-          entities[5].name,
-        })
-        if #missing > 0 then
-          return false
-        end
-        stack.set_blueprint_entities(entities)
-        apply_request_filters_to_blueprint(stack, entities, request_list)
-        player.print("Quick Mall: blueprint added to inventory. Pick it up to place.")
-        return true
-      end
-    end
   end
 
   return false
@@ -841,6 +807,7 @@ local function handle_create_click(player)
   local inserter_offset = half_width + 1
   local chest_offset = half_width + 2
 
+  local request_list = get_item_requests(recipe)
   local entities = build_blueprint_entities(
     { x = 0, y = 0 },
     building_name,
@@ -849,10 +816,9 @@ local function handle_create_click(player)
     output_chest,
     inserter_name,
     chest_offset,
-    inserter_offset
+    inserter_offset,
+    request_list
   )
-
-  local request_list = get_item_requests(recipe)
   if not give_blueprint_cursor(player, entities, request_list) then
     player.print("Quick Mall: unable to create blueprint. Clear your cursor and try again.")
     return
@@ -870,9 +836,19 @@ local function apply_ghost_tags(entity, tags)
     entity.set_recipe(tags.quick_mall_recipe)
   end
 
-  if tags.quick_mall_requests and entity.request_slot_count then
-    for index, request in ipairs(tags.quick_mall_requests) do
-      entity.set_request_slot(request, index)
+  if tags.quick_mall_requests then
+    local ok, setter = pcall(function()
+      return entity.set_request_slot
+    end)
+    if ok and setter then
+      for index, request in ipairs(tags.quick_mall_requests) do
+        local success = pcall(function()
+          setter(entity, request, index)
+        end)
+        if not success then
+          break
+        end
+      end
     end
   end
 end
@@ -991,7 +967,17 @@ local function handle_built_entity(event)
     return
   end
 
-  apply_ghost_tags(entity, event.tags)
+  local tags = event.tags
+  if not tags and entity.tags then
+    local ok, entity_tags = pcall(function()
+      return entity.tags
+    end)
+    if ok then
+      tags = entity_tags
+    end
+  end
+
+  apply_ghost_tags(entity, tags)
 end
 
 script.on_event(defines.events.on_built_entity, handle_built_entity)
