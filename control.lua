@@ -27,12 +27,39 @@ local INSERTER_CANDIDATES = {
   { name = "stack-inserter", label = "Stack Inserter" },
 }
 
+local function get_entity_prototypes()
+  local ok, prototypes = pcall(function()
+    return game.entity_prototypes
+  end)
+  if ok and prototypes then
+    return prototypes
+  end
+
+  ok, prototypes = pcall(function()
+    if game.get_filtered_entity_prototypes then
+      return game.get_filtered_entity_prototypes({})
+    end
+    return nil
+  end)
+  if ok and prototypes then
+    return prototypes
+  end
+
+  local proto_root = rawget(_G, "prototypes")
+  if proto_root and proto_root.entity then
+    return proto_root.entity
+  end
+
+  return {}
+end
+
 local function build_option_list(candidates)
   local names = {}
   local labels = {}
+  local prototypes = get_entity_prototypes()
 
   for _, option in ipairs(candidates) do
-    if game.entity_prototypes[option.name] then
+    if prototypes[option.name] then
       table.insert(names, option.name)
       table.insert(labels, option.label)
     end
@@ -70,8 +97,9 @@ end
 local function build_building_options(force, item_name)
   local names = {}
   local labels = {}
+  local prototypes = get_entity_prototypes()
 
-  for name, prototype in pairs(game.entity_prototypes) do
+  for name, prototype in pairs(prototypes) do
     local placeable = prototype.items_to_place_this and #prototype.items_to_place_this > 0
     if placeable and prototype.crafting_categories and next(prototype.crafting_categories) then
       if not item_name or find_recipe_for_item(force, item_name, prototype) then
@@ -83,7 +111,7 @@ local function build_building_options(force, item_name)
   table.sort(names)
 
   for _, name in ipairs(names) do
-    local prototype = game.entity_prototypes[name]
+    local prototype = prototypes[name]
     local localised_name = prototype and prototype.localised_name
     if localised_name then
       table.insert(labels, localised_name)
@@ -127,7 +155,7 @@ local function build_recipe_options(force, item_name, building_name)
     return { names = { nil }, labels = { "Unavailable" } }
   end
 
-  local building_prototype = game.entity_prototypes[building_name]
+  local building_prototype = get_entity_prototypes()[building_name]
   if not building_prototype then
     return { names = { nil }, labels = { "Unavailable" } }
   end
@@ -154,9 +182,19 @@ local function build_recipe_options(force, item_name, building_name)
   return { names = names, labels = labels }
 end
 
+local function get_storage_root()
+  local root = rawget(_G, "global") or rawget(_G, "storage")
+  if not root then
+    return nil
+  end
+
+  root.quick_mall = root.quick_mall or {}
+  root.quick_mall.options = root.quick_mall.options or {}
+  return root.quick_mall
+end
+
 local function ensure_global()
-  global.quick_mall = global.quick_mall or {}
-  global.quick_mall.options = global.quick_mall.options or {}
+  get_storage_root()
 end
 
 local function destroy_gui(player)
@@ -232,7 +270,7 @@ end
 local function create_quick_mall(player, item_name, building_name, recipe_name, input_chest, output_chest, inserter_name)
   local force = player.force
   local surface = player.surface
-  local building_prototype = game.entity_prototypes[building_name]
+  local building_prototype = get_entity_prototypes()[building_name]
 
   if not building_prototype then
     player.print("Quick Mall: selected building is not available.")
@@ -343,7 +381,10 @@ local function build_gui(player)
     output_chests = build_option_list(OUTPUT_CHEST_CANDIDATES),
     inserters = build_option_list(INSERTER_CANDIDATES),
   }
-  global.quick_mall.options[player.index] = options
+  local storage = get_storage_root()
+  if storage then
+    storage.options[player.index] = options
+  end
 
   local frame = player.gui.screen.add({
     type = "frame",
@@ -438,7 +479,8 @@ end
 
 local function refresh_building_dropdown(player, item_name)
   ensure_global()
-  local options = global.quick_mall.options[player.index]
+  local storage = get_storage_root()
+  local options = storage and storage.options[player.index]
   if not options then
     return
   end
@@ -459,7 +501,8 @@ end
 
 local function refresh_recipe_dropdown(player, item_name)
   ensure_global()
-  local options = global.quick_mall.options[player.index]
+  local storage = get_storage_root()
+  local options = storage and storage.options[player.index]
   if not options then
     return
   end
@@ -486,7 +529,8 @@ end
 
 local function handle_create_click(player)
   ensure_global()
-  local options = global.quick_mall.options[player.index]
+  local storage = get_storage_root()
+  local options = storage and storage.options[player.index]
 
   if not options then
     player.print("Quick Mall: please reopen the menu.")
