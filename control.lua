@@ -113,6 +113,47 @@ local function resolve_entity_prototype(entity_name)
   return nil
 end
 
+local function get_item_prototypes()
+  local ok, prototypes = pcall(function()
+    return game.item_prototypes
+  end)
+  if ok and prototypes then
+    return prototypes
+  end
+
+  local proto_root = rawget(_G, "prototypes")
+  if proto_root and proto_root.item then
+    return proto_root.item
+  end
+
+  return {}
+end
+
+local function resolve_item_prototype(item_name)
+  local ok, proto = pcall(function()
+    if game.get_item_prototype then
+      return game.get_item_prototype(item_name)
+    end
+    return nil
+  end)
+  if ok and proto then
+    return proto
+  end
+
+  local prototypes = get_item_prototypes()
+  if type(prototypes) == "table" then
+    return prototypes[item_name]
+  end
+
+  ok, proto = pcall(function()
+    return prototypes and prototypes[item_name] or nil
+  end)
+  if ok then
+    return proto
+  end
+  return nil
+end
+
 local function can_resolve_prototypes()
   return resolve_entity_prototype("inserter") ~= nil
 end
@@ -380,7 +421,7 @@ local function get_item_requests(player, recipe)
   for _, ingredient in pairs(recipe.ingredients or {}) do
     local ingredient_type = ingredient.type or "item"
     if ingredient_type == "item" then
-      local prototype = resolve_entity_prototype(ingredient.name)
+      local prototype = resolve_item_prototype(ingredient.name)
       local stack_size = (prototype and prototype.stack_size) or 1
       local count = math.max(1, stack_size)
       table.insert(requests, { index = index, name = ingredient.name, count = count, quality = "normal", comparator = "=" })
