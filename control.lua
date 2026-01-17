@@ -374,14 +374,15 @@ local function get_entity_tile_size(prototype)
   return math.ceil(width), math.ceil(height)
 end
 
-local function get_item_requests(recipe)
+local function get_item_requests(player, recipe)
   local requests = {}
-  index = 1
+  local index = 1
   for _, ingredient in pairs(recipe.ingredients or {}) do
     local ingredient_type = ingredient.type or "item"
     if ingredient_type == "item" then
-      local amount = ingredient.amount or ingredient.amount_max or ingredient.amount_min or 1
-      local count = math.max(1, math.ceil(amount))
+      local prototype = resolve_entity_prototype(ingredient.name)
+      local stack_size = (prototype and prototype.stack_size) or 1
+      local count = math.max(1, stack_size)
       table.insert(requests, { index = index, name = ingredient.name, count = count, quality = "normal", comparator = "=" })
       index = index + 1
     end
@@ -807,7 +808,7 @@ local function handle_create_click(player)
   local inserter_offset = half_width + 1
   local chest_offset = half_width + 2
 
-  local request_list = get_item_requests(recipe)
+  local request_list = get_item_requests(player, recipe)
   local entities = build_blueprint_entities(
     { x = 0, y = 0 },
     building_name,
@@ -824,6 +825,7 @@ local function handle_create_click(player)
     return
   end
 
+  destroy_gui(player)
   player.print("Quick Mall: blueprint ready. Click to place it.")
 end
 
