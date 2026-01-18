@@ -1,6 +1,7 @@
 local GUI_ROOT = "quick-mall-window"
 local GUI_ITEM = "quick-mall-item"
-local GUI_RECIPE = "quick-mall-recipe"
+local GUI_RECIPE_FLOW = "quick-mall-recipe-flow"
+local GUI_RECIPE_PREFIX = "quick-mall-recipe-"
 local GUI_INPUT_CHEST = "quick-mall-input-chest"
 local GUI_OUTPUT_CHEST = "quick-mall-output-chest"
 local GUI_INSERTER = "quick-mall-inserter"
@@ -353,6 +354,31 @@ local function render_quality_buttons(frame, options)
       tooltip = quality.localised_name,
     })
     button.toggled = (options.quality_selection == quality.name)
+  end
+end
+
+local function render_recipe_buttons(frame, options)
+  local recipe_icons = frame and find_child_by_name(frame, GUI_RECIPE_FLOW)
+  if not recipe_icons then
+    return
+  end
+
+  recipe_icons.clear()
+
+  if #options.recipes.names == 0 or (options.recipes.names[1] == nil) then
+    recipe_icons.add({ type = "label", caption = "Unavailable" })
+    return
+  end
+
+  for i, recipe_name in ipairs(options.recipes.names) do
+    local button = recipe_icons.add({
+      type = "sprite-button",
+      name = GUI_RECIPE_PREFIX .. i,
+      sprite = "recipe/" .. recipe_name,
+      style = "slot_button",
+      tooltip = options.recipes.labels[i],
+    })
+    button.toggled = (options.recipe_selection_index == i)
   end
 end
 
@@ -958,12 +984,12 @@ local function build_gui(player)
 
   local recipe_flow = content.add({ type = "flow", direction = "horizontal" })
   recipe_flow.add({ type = "label", caption = "Recipe: " })
-  recipe_flow.add({
-    type = "drop-down",
-    name = GUI_RECIPE,
-    items = options.recipes.labels,
-    selected_index = options.recipe_selection_index,
+  local recipe_icons = recipe_flow.add({
+    type = "flow",
+    name = GUI_RECIPE_FLOW,
+    direction = "horizontal",
   })
+  recipe_icons.style.horizontal_spacing = 4
 
   local input_flow = content.add({ type = "flow", direction = "horizontal" })
   input_flow.add({ type = "label", caption = "Input chest: " })
@@ -1014,6 +1040,7 @@ local function build_gui(player)
   player.opened = frame
 
   render_building_buttons(frame, options)
+  render_recipe_buttons(frame, options)
 
   if not is_valid_selection(options.input_chest_selection, options.input_chests.names) then
     options.input_chest_selection = options.input_chests.names[1]
@@ -1071,7 +1098,7 @@ local function refresh_building_dropdown(player, item_name)
   render_building_buttons(frame, options)
 end
 
-local function refresh_recipe_dropdown(player, item_name)
+local function refresh_recipe_buttons(player, item_name)
   ensure_global()
   local storage = get_storage_root()
   local options = storage and storage.options[player.index]
@@ -1087,19 +1114,12 @@ local function refresh_recipe_dropdown(player, item_name)
   local building_name = options.building_selection
   options.recipes = build_recipe_options(player.force, item_name, building_name)
 
-  local recipe_elem = find_child_by_name(frame, GUI_RECIPE)
-  if recipe_elem then
-    recipe_elem.items = options.recipes.labels
-    
-    -- Try to maintain the previous recipe index if it's still valid
-    local new_index = options.recipe_selection_index or 1
-    if new_index > #options.recipes.names then
-      new_index = 1
-    end
-    
-    recipe_elem.selected_index = new_index
-    options.recipe_selection_index = new_index
+  -- Reset recipe selection index if it's out of range
+  if options.recipe_selection_index > #options.recipes.names then
+    options.recipe_selection_index = 1
   end
+
+  render_recipe_buttons(frame, options)
 end
 
 local function handle_create_click(player)
@@ -1118,7 +1138,6 @@ local function handle_create_click(player)
   end
 
   local item_elem = find_child_by_name(frame, GUI_ITEM)
-  local recipe_elem = find_child_by_name(frame, GUI_RECIPE)
 
   local item_name = item_elem and item_elem.elem_value
   if not item_name then
@@ -1127,7 +1146,7 @@ local function handle_create_click(player)
   end
 
   local building_name = options.building_selection
-  local recipe_name = recipe_elem and options.recipes.names[recipe_elem.selected_index] or nil
+  local recipe_name = options.recipes.names[options.recipe_selection_index]
   local input_chest = options.input_chest_selection
   local output_chest = options.output_chest_selection
   local inserter_name = options.inserter_selection
@@ -1279,7 +1298,19 @@ script.on_event(defines.events.on_gui_click, function(event)
 
       local item_elem = find_child_by_name(frame, GUI_ITEM)
       local item_name = item_elem and item_elem.elem_value
-      refresh_recipe_dropdown(player, item_name)
+      refresh_recipe_buttons(player, item_name)
+    elseif event.element.name:find(GUI_RECIPE_PREFIX, 1, true) == 1 then
+      local storage = get_storage_root()
+      local options = storage and storage.options[player.index]
+      if not options then
+        return
+      end
+
+      local index = tonumber(event.element.name:sub(#GUI_RECIPE_PREFIX + 1))
+      options.recipe_selection_index = index
+
+      local frame = player.gui.screen[GUI_ROOT]
+      render_recipe_buttons(frame, options)
     elseif event.element.name:find(GUI_INPUT_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]
@@ -1354,24 +1385,16 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
     end
     if options then
       options.item_selection = event.element.elem_value
+      options.recipe_selection_index = 1
     end
     refresh_building_dropdown(player, event.element.elem_value)
-    refresh_recipe_dropdown(player, event.element.elem_value)
+    refresh_recipe_buttons(player, event.element.elem_value)
   end
 end)
 
 script.on_event(defines.events.on_gui_selection_state_changed, function(event)
   local player = game.get_player(event.player_index)
   if not player then
-    return
-  end
-
-  if event.element and event.element.valid and event.element.name == GUI_RECIPE then
-    local storage = get_storage_root()
-    local options = storage and storage.options[player.index]
-    if options then
-      options.recipe_selection_index = event.element.selected_index
-    end
     return
   end
 end)
