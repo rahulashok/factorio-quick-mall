@@ -657,16 +657,6 @@ local function can_place_all(surface, force, placements)
   return true, nil
 end
 
-local function build_layout_placements(center, building_name, input_chest, output_chest, inserter_name, chest_offset, inserter_offset)
-  return {
-    { name = building_name, position = center, direction = defines.direction.north },
-    { name = input_chest, position = { x = center.x - chest_offset, y = center.y } },
-    { name = output_chest, position = { x = center.x - chest_offset, y = center.y + 1 } },
-    { name = inserter_name, position = { x = center.x - inserter_offset, y = center.y }, direction = defines.direction.east },
-    { name = inserter_name, position = { x = center.x - inserter_offset, y = center.y + 1 }, direction = defines.direction.west },
-  }
-end
-
 local function build_blueprint_entities(
   base_position,
   building_name,
@@ -732,7 +722,7 @@ local function build_blueprint_entities(
     add_entity({
       name = inserter_name,
       position = { x = base_position.x - inserter_offset, y = base_position.y },
-      direction = defines.direction.east,
+      direction = defines.direction.west,
     })
   end
 
@@ -744,7 +734,7 @@ local function build_blueprint_entities(
   add_entity({
     name = inserter_name,
     position = { x = base_position.x - inserter_offset, y = base_position.y + 1 },
-    direction = defines.direction.west,
+    direction = defines.direction.east,
   })
 
   return entities
@@ -804,6 +794,25 @@ local function give_blueprint_cursor(player, entities, request_list)
   return false
 end
 
+local function get_researched_item_filters(force)
+  local item_names = {}
+  for _, recipe in pairs(force.recipes) do
+    if recipe.enabled then
+      for _, product in pairs(recipe.products) do
+        if product.type == "item" then
+          item_names[product.name] = true
+        end
+      end
+    end
+  end
+
+  local filters = {}
+  for name, _ in pairs(item_names) do
+    table.insert(filters, { filter = "name", name = name })
+  end
+  return filters
+end
+
 local function is_valid_selection(selection, list)
   if not selection then return false end
   for _, name in ipairs(list) do
@@ -854,6 +863,8 @@ local function build_gui(player)
     storage.options[player.index] = options
   end
 
+  local item_filters = get_researched_item_filters(player.force)
+
   local frame = player.gui.screen.add({
     type = "frame",
     name = GUI_ROOT,
@@ -886,6 +897,7 @@ local function build_gui(player)
     type = "choose-elem-button",
     name = GUI_ITEM,
     elem_type = "item-with-quality",
+    elem_filters = item_filters,
     tooltip = "Choose the item to craft.",
   })
   
@@ -1161,9 +1173,20 @@ local function apply_ghost_tags(entity, tags)
     return
   end
 
-  if tags.quick_mall_recipe and entity.set_recipe then
-    local quality = tags.quick_mall_recipe_quality or "normal"
-    entity.set_recipe(tags.quick_mall_recipe, quality)
+  if tags.quick_mall_recipe then
+    -- Check if it's an assembling-machine or something that actually uses recipes
+    -- Furnaces do not use set_recipe() in the API, they are configured differently.
+    local actual_entity = entity
+    if entity.type == "entity-ghost" then
+      -- If it's a ghost, we can only set the recipe if the ghost type supports it
+      if entity.ghost_type == "assembling-machine" then
+        local quality = tags.quick_mall_recipe_quality or "normal"
+        entity.set_recipe(tags.quick_mall_recipe, quality)
+      end
+    elseif entity.type == "assembling-machine" then
+      local quality = tags.quick_mall_recipe_quality or "normal"
+      entity.set_recipe(tags.quick_mall_recipe, quality)
+    end
   end
 
   if tags.quick_mall_requests then
