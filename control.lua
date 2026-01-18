@@ -279,7 +279,7 @@ local function render_building_buttons(frame, options)
   building_icons.clear()
 
   if #options.buildings.names == 0 then
-    building_icons.add({ type = "label", caption = "Unavailable" })
+    building_icons.add({ type = "label", caption = "No options found for this surface" })
     return
   end
 
@@ -409,7 +409,7 @@ local function render_recipe_buttons(frame, options)
   recipe_icons.clear()
 
   if #options.recipes.names == 0 or (options.recipes.names[1] == nil) then
-    recipe_icons.add({ type = "label", caption = "Unavailable" })
+    recipe_icons.add({ type = "label", caption = "No options found for this surface" })
     return
   end
 
@@ -504,7 +504,7 @@ local function build_building_options(force, item_name, surface)
   end
 
   if #names == 0 then
-    return { names = { nil }, labels = { "Unavailable" } }
+    return { names = { nil }, labels = { "No options found for this surface" } }
   end
 
   return { names = names, labels = labels }
@@ -540,12 +540,12 @@ local function build_recipe_options(force, item_name, building_name, surface)
   end
 
   if not (name_to_check and building_name) then
-    return { names = { nil }, labels = { "Unavailable" } }
+    return { names = { nil }, labels = { "No options found for this surface" } }
   end
 
   local building_prototype = resolve_entity_prototype(building_name)
   if not building_prototype then
-    return { names = { nil }, labels = { "Unavailable" } }
+    return { names = { nil }, labels = { "No options found for this surface" } }
   end
 
   local names = {}
@@ -561,7 +561,7 @@ local function build_recipe_options(force, item_name, building_name, surface)
   table.sort(names)
 
   if #names == 0 then
-    return { names = { nil }, labels = { "Unavailable" } }
+    return { names = { nil }, labels = { "No options found for this surface" } }
   end
 
   local labels = {}
@@ -902,7 +902,7 @@ local function build_gui(player)
 
   local options = {
     buildings = build_building_options(player.force, existing_options and existing_options.item_selection, player.surface),
-    recipes = { names = { nil }, labels = { "Unavailable" } },
+    recipes = { names = { nil }, labels = { "No options found for this surface" } },
     input_chests = build_option_list(INPUT_CHEST_CANDIDATES),
     output_chests = build_option_list(OUTPUT_CHEST_CANDIDATES),
     inserters = build_option_list(INSERTER_CANDIDATES),
@@ -1040,7 +1040,7 @@ local function build_gui(player)
   button_flow.add({
     type = "button",
     name = GUI_CREATE,
-    caption = "Place ghosts",
+    caption = "Build Quick Mall",
   })
 
   player.opened = frame
