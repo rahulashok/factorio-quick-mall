@@ -1089,7 +1089,8 @@ local function build_gui(player)
   content.style.vertical_spacing = 8
 
   local item_flow = content.add({ type = "flow", direction = "horizontal" })
-  item_flow.add({ type = "label", caption = "Item: " })
+  item_flow.style.vertical_align = "center"
+  item_flow.add({ type = "label", caption = "Item: ", style = "heading_2_label" })
   local item_picker = item_flow.add({
     type = "choose-elem-button",
     name = GUI_ITEM,
@@ -1105,16 +1106,19 @@ local function build_gui(player)
   options.is_initializing = false
 
   local building_flow = content.add({ type = "flow", direction = "horizontal" })
-  building_flow.add({ type = "label", caption = "Building: " })
+  building_flow.style.vertical_align = "center"
+  building_flow.add({ type = "label", caption = "Building: ", style = "heading_2_label" })
   local building_icons = building_flow.add({
-    type = "flow",
+    type = "table",
     name = GUI_BUILDING_FLOW,
-    direction = "horizontal",
+    column_count = 10,
   })
   building_icons.style.horizontal_spacing = 4
+  building_icons.style.vertical_spacing = 4
 
   local recipe_flow = content.add({ type = "flow", direction = "horizontal" })
-  recipe_flow.add({ type = "label", caption = "Recipe: " })
+  recipe_flow.style.vertical_align = "center"
+  recipe_flow.add({ type = "label", caption = "Recipe: ", style = "heading_2_label" })
   local recipe_icons = recipe_flow.add({
     type = "flow",
     name = GUI_RECIPE_FLOW,
@@ -1123,7 +1127,8 @@ local function build_gui(player)
   recipe_icons.style.horizontal_spacing = 4
 
   local input_flow = content.add({ type = "flow", direction = "horizontal" })
-  input_flow.add({ type = "label", caption = "Input chest: " })
+  input_flow.style.vertical_align = "center"
+  input_flow.add({ type = "label", caption = "Input chest: ", style = "heading_2_label" })
   local input_icons = input_flow.add({
     type = "flow",
     name = GUI_INPUT_FLOW,
@@ -1132,7 +1137,8 @@ local function build_gui(player)
   input_icons.style.horizontal_spacing = 4
 
   local output_flow = content.add({ type = "flow", direction = "horizontal" })
-  output_flow.add({ type = "label", caption = "Output chest: " })
+  output_flow.style.vertical_align = "center"
+  output_flow.add({ type = "label", caption = "Output chest: ", style = "heading_2_label" })
   local output_icons = output_flow.add({
     type = "flow",
     name = GUI_OUTPUT_FLOW,
@@ -1141,7 +1147,8 @@ local function build_gui(player)
   output_icons.style.horizontal_spacing = 4
 
   local inserter_flow = content.add({ type = "flow", direction = "horizontal" })
-  inserter_flow.add({ type = "label", caption = "Inserter: " })
+  inserter_flow.style.vertical_align = "center"
+  inserter_flow.add({ type = "label", caption = "Inserter: ", style = "heading_2_label" })
   local inserter_icons = inserter_flow.add({
     type = "flow",
     name = GUI_INSERTER_FLOW,
