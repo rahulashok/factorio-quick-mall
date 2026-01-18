@@ -372,28 +372,37 @@ local function is_recipe_compatible_with_surface(recipe, surface)
   return true
 end
 
-local function find_recipe_for_item(force, item_name, building_prototype, surface)
+local function get_recipes_for_item(force, item_name, surface)
   local name_to_check = item_name
   if type(item_name) == "table" then
     name_to_check = item_name.name
   end
+  if not name_to_check then return {} end
 
+  local results = {}
   for _, recipe in pairs(force.recipes) do
-    local compatible = is_recipe_compatible_with_surface(recipe, surface)
-    if recipe.enabled and compatible then
-      local products = recipe.products or {}
-      for _, product in pairs(products) do
+    if recipe.enabled and is_recipe_compatible_with_surface(recipe, surface) then
+      for _, product in pairs(recipe.products or {}) do
         if product.type == "item" and product.name == name_to_check then
-          if not building_prototype then
-            return recipe
-          end
-
-          local categories = building_prototype.crafting_categories or {}
-          if categories[recipe.category] then
-            return recipe
-          end
+          table.insert(results, recipe)
+          break
         end
       end
+    end
+  end
+  return results
+end
+
+local function find_recipe_for_item(force, item_name, building_prototype, surface)
+  local valid_recipes = get_recipes_for_item(force, item_name, surface)
+  if #valid_recipes == 0 then return nil end
+  
+  if not building_prototype then return valid_recipes[1] end
+  
+  local categories = building_prototype.crafting_categories or {}
+  for _, recipe in ipairs(valid_recipes) do
+    if categories[recipe.category] then
+      return recipe
     end
   end
 
@@ -425,10 +434,19 @@ local function render_recipe_buttons(frame, options)
   end
 end
 
-local function build_building_options(force, item_name, surface)
+local function build_building_options(player, force, item_name, surface)
   local name_to_check = item_name
   if type(item_name) == "table" then
     name_to_check = item_name.name
+  end
+
+  -- OPTIMIZATION: Find valid recipes for this item FIRST
+  local valid_recipes = {}
+  if name_to_check then
+    valid_recipes = get_recipes_for_item(force, name_to_check, surface)
+    if #valid_recipes == 0 then
+      return { names = { nil }, labels = { "No options found for this surface" } }
+    end
   end
 
   local prototypes = get_entity_prototypes()
@@ -462,7 +480,21 @@ local function build_building_options(force, item_name, surface)
       end
 
       if is_valid then
-        if not item_name or find_recipe_for_item(force, item_name, prototype, surface) then
+        local building_can_craft = false
+        if not name_to_check then
+          building_can_craft = true
+        else
+          -- EXTREMELY FAST CHECK: Does this building support ANY of the pre-filtered recipes?
+          local building_categories = prototype.crafting_categories or {}
+          for _, recipe in ipairs(valid_recipes) do
+            if building_categories[recipe.category] then
+              building_can_craft = true
+              break
+            end
+          end
+        end
+
+        if building_can_craft then
           table.insert(entries, {
             name = name,
             label = prototype.localised_name or name,
@@ -479,7 +511,20 @@ local function build_building_options(force, item_name, surface)
       if not found_names[option.name] then
         local prototype = resolve_entity_prototype(option.name)
         if prototype then
-          if not item_name or find_recipe_for_item(force, item_name, prototype, surface) then
+          local building_can_craft = false
+          if not name_to_check then
+            building_can_craft = true
+          else
+            local building_categories = prototype.crafting_categories or {}
+            for _, recipe in ipairs(valid_recipes) do
+              if building_categories[recipe.category] then
+                building_can_craft = true
+                break
+              end
+            end
+          end
+
+          if building_can_craft then
             table.insert(entries, {
               name = option.name,
               label = prototype.localised_name or option.name,
@@ -852,6 +897,25 @@ local function check_and_clear_incompatible_cursor_recipe(player)
   end
 end
 
+local function get_researched_item_filters(force)
+  local item_names = {}
+  for _, recipe in pairs(force.recipes) do
+    if recipe.enabled then
+      for _, product in pairs(recipe.products) do
+        if product.type == "item" then
+          item_names[product.name] = true
+        end
+      end
+    end
+  end
+
+  local filters = {}
+  for name, _ in pairs(item_names) do
+    table.insert(filters, { filter = "name", name = name })
+  end
+  return filters
+end
+
 local function is_valid_selection(selection, list)
   if not selection then return false end
   for _, name in ipairs(list) do
@@ -901,7 +965,7 @@ local function build_gui(player)
   local existing_options = storage and storage.options[player.index]
 
   local options = {
-    buildings = build_building_options(player.force, existing_options and existing_options.item_selection, player.surface),
+    buildings = build_building_options(player, player.force, existing_options and existing_options.item_selection, player.surface),
     recipes = { names = { nil }, labels = { "No options found for this surface" } },
     input_chests = build_option_list(INPUT_CHEST_CANDIDATES),
     output_chests = build_option_list(OUTPUT_CHEST_CANDIDATES),
@@ -1087,7 +1151,7 @@ local function refresh_building_dropdown(player, item_name)
   end
 
   local old_selection = options.building_selection
-  options.buildings = build_building_options(player.force, item_name, player.surface)
+  options.buildings = build_building_options(player, player.force, item_name, player.surface)
   
   if not is_valid_selection(old_selection, options.buildings.names) then
     options.building_selection = options.buildings.names[1]
@@ -1237,7 +1301,6 @@ local function handle_create_click(player)
   end
 
   destroy_gui(player)
-  player.print("Quick Mall: blueprint ready. Click to place it.")
 end
 
 local function apply_ghost_tags(entity, tags)
