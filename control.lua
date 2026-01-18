@@ -270,6 +270,28 @@ local function has_solid_inputs(recipe)
   return false
 end
 
+local function has_solid_outputs(recipe)
+  if not recipe then return false end
+  local products = recipe.products or {}
+  for _, product in pairs(products) do
+    if product.type == "item" then
+      return true
+    end
+  end
+  return false
+end
+
+local function has_solid_outputs(recipe)
+  if not recipe then return false end
+  local products = recipe.products or {}
+  for _, product in pairs(products) do
+    if product.type == "item" then
+      return true
+    end
+  end
+  return false
+end
+
 local function render_building_buttons(frame, options)
   local building_icons = frame and find_child_by_name(frame, GUI_BUILDING_FLOW)
   if not building_icons then
@@ -323,13 +345,21 @@ local function render_input_chest_buttons(frame, options, force)
   end
 end
 
-local function render_output_chest_buttons(frame, options)
+local function render_output_chest_buttons(frame, options, force)
   local output_icons = frame and find_child_by_name(frame, GUI_OUTPUT_FLOW)
   if not output_icons then
     return
   end
 
   output_icons.clear()
+
+  local recipe_name = options.recipes.names[options.recipe_selection_index]
+  local recipe = recipe_name and force.recipes[recipe_name]
+  
+  if recipe and not has_solid_outputs(recipe) then
+    output_icons.add({ type = "label", caption = "No solid output items" })
+    return
+  end
 
   for _, chest_name in ipairs(options.output_chests.names) do
     local button = output_icons.add({
@@ -383,7 +413,7 @@ local function get_recipes_for_item(force, item_name, surface)
   for _, recipe in pairs(force.recipes) do
     if recipe.enabled and is_recipe_compatible_with_surface(recipe, surface) then
       for _, product in pairs(recipe.products or {}) do
-        if product.type == "item" and product.name == name_to_check then
+        if product.name == name_to_check then
           table.insert(results, recipe)
           break
         end
@@ -561,7 +591,7 @@ local function recipe_outputs_item(recipe, item_name)
   end
 
   for _, product in pairs(recipe.products or {}) do
-    if product.type == "item" and product.name == item_name then
+    if product.name == item_name then
       return true
     end
   end
@@ -844,7 +874,7 @@ local function get_researched_item_filters(force)
   for _, recipe in pairs(force.recipes) do
     if recipe.enabled then
       for _, product in pairs(recipe.products) do
-        if product.type == "item" then
+        if product.type == "item" or product.type == "fluid" then
           item_names[product.name] = true
         end
       end
@@ -902,7 +932,7 @@ local function get_researched_item_filters(force)
   for _, recipe in pairs(force.recipes) do
     if recipe.enabled then
       for _, product in pairs(recipe.products) do
-        if product.type == "item" then
+        if product.type == "item" or product.type == "fluid" then
           item_names[product.name] = true
         end
       end
@@ -1032,7 +1062,7 @@ local function build_gui(player)
   local item_picker = item_flow.add({
     type = "choose-elem-button",
     name = GUI_ITEM,
-    elem_type = "item-with-quality",
+    elem_type = "signal",
     elem_filters = item_filters,
     tooltip = "Choose the item to craft.",
   })
@@ -1120,7 +1150,7 @@ local function build_gui(player)
   if not is_valid_selection(options.output_chest_selection, options.output_chests.names) then
     options.output_chest_selection = options.output_chests.names[1]
   end
-  render_output_chest_buttons(frame, options)
+  render_output_chest_buttons(frame, options, player.force)
 
   if not is_valid_selection(options.inserter_selection, options.inserters.names) then
     options.inserter_selection = options.inserters.names[1]
@@ -1194,6 +1224,7 @@ local function refresh_recipe_buttons(player, item_name)
   options.recipe_selection_index = new_index
   render_recipe_buttons(frame, options)
   render_input_chest_buttons(frame, options, player.force)
+  render_output_chest_buttons(frame, options, player.force)
 end
 
 local function handle_create_click(player)
@@ -1410,6 +1441,7 @@ script.on_event(defines.events.on_gui_click, function(event)
       local frame = player.gui.screen[GUI_ROOT]
       render_recipe_buttons(frame, options)
       render_input_chest_buttons(frame, options, player.force)
+      render_output_chest_buttons(frame, options, player.force)
     elseif event.element.name:find(GUI_INPUT_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]
