@@ -1121,10 +1121,6 @@ local function handle_create_click(player)
   local recipe_elem = find_child_by_name(frame, GUI_RECIPE)
 
   local item_name = item_elem and item_elem.elem_value
-  if options and item_name then
-    options.item_selection = item_name
-  end
-
   if not item_name then
     player.print("Quick Mall: choose an item first.")
     return
@@ -1382,17 +1378,6 @@ end)
 
 script.on_event(defines.events.on_gui_closed, function(event)
   if event.element and event.element.valid and event.element.name == GUI_ROOT then
-    local player = game.get_player(event.player_index)
-    if player then
-      local storage = get_storage_root()
-      local options = storage and storage.options[player.index]
-      if options then
-        local item_elem = find_child_by_name(event.element, GUI_ITEM)
-        if item_elem and item_elem.elem_value then
-          options.item_selection = item_elem.elem_value
-        end
-      end
-    end
     event.element.destroy()
   end
 end)
