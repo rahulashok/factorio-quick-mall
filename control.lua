@@ -642,7 +642,9 @@ local function build_recipe_options(force, item_name, building_name, surface)
   local labels = {}
   for _, recipe_name in ipairs(names) do
     local recipe = force.recipes[recipe_name]
-    table.insert(labels, recipe and recipe.name or recipe_name)
+    local localized = recipe
+      and (recipe.localised_name or (recipe.prototype and recipe.prototype.localised_name) or recipe.name)
+    table.insert(labels, localized or recipe_name)
   end
 
   return { names = names, labels = labels }
