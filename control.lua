@@ -355,6 +355,13 @@ local function build_building_options(force, item_name)
       end)
 
       if is_valid then
+        -- Exclude recyclers and other non-production buildings
+        if name:find("recycler", 1, true) then
+          is_valid = false
+        end
+      end
+
+      if is_valid then
         if not item_name or find_recipe_for_item(force, item_name, prototype) then
           table.insert(names, name)
           found_names[name] = true
@@ -713,6 +720,17 @@ local function build_chest_options(force, is_input)
           local placeable = false
           if proto.items_to_place_this and #proto.items_to_place_this > 0 then
             placeable = true
+          end
+
+          if not is_hidden and placeable then
+            -- Exclude "cheat" or "debug" chests that aren't intended for normal play
+            local lower_name = name:lower()
+            if lower_name:find("bottomless", 1, true) or 
+               lower_name:find("debug", 1, true) or 
+               lower_name:find("cheat", 1, true) or
+               lower_name:find("editor", 1, true) then
+              placeable = false
+            end
           end
 
           if not is_hidden and placeable then
