@@ -309,9 +309,41 @@ local function render_output_chest_buttons(frame, options)
   end
 end
 
-local function find_recipe_for_item(force, item_name, building_prototype)
+local function is_recipe_compatible_with_surface(recipe, surface)
+  if not (recipe and surface) then return true end
+  
+  local proto = recipe.prototype
+  if not proto then return true end
+
+  local is_compatible = true
+  local conditions = proto.surface_conditions
+  if conditions then
+    for _, condition in ipairs(conditions) do
+      -- In Factorio 2.0, surface properties are retrieved via get_property(name)
+      local property_value = 0
+      local ok_val, val = pcall(function() return surface.get_property(condition.property) end)
+      if ok_val and val then
+        property_value = val
+      end
+      
+      if condition.min and property_value < condition.min then
+        is_compatible = false
+        break
+      end
+      if condition.max and property_value > condition.max then
+        is_compatible = false
+        break
+      end
+    end
+  end
+  
+  return is_compatible
+end
+
+local function find_recipe_for_item(force, item_name, building_prototype, surface)
   for _, recipe in pairs(force.recipes) do
-    if recipe.enabled then
+    local compatible = is_recipe_compatible_with_surface(recipe, surface)
+    if recipe.enabled and compatible then
       local products = recipe.products or {}
       for _, product in pairs(products) do
         if product.type == "item" and product.name == item_name then
@@ -382,7 +414,7 @@ local function render_recipe_buttons(frame, options)
   end
 end
 
-local function build_building_options(force, item_name)
+local function build_building_options(force, item_name, surface)
   local prototypes = get_entity_prototypes()
   local entries = {}
   local found_names = {}
@@ -414,7 +446,7 @@ local function build_building_options(force, item_name)
       end
 
       if is_valid then
-        if not item_name or find_recipe_for_item(force, item_name, prototype) then
+        if not item_name or find_recipe_for_item(force, item_name, prototype, surface) then
           table.insert(entries, {
             name = name,
             label = prototype.localised_name or name,
@@ -431,7 +463,7 @@ local function build_building_options(force, item_name)
       if not found_names[option.name] then
         local prototype = resolve_entity_prototype(option.name)
         if prototype then
-          if not item_name or find_recipe_for_item(force, item_name, prototype) then
+          if not item_name or find_recipe_for_item(force, item_name, prototype, surface) then
             table.insert(entries, {
               name = option.name,
               label = prototype.localised_name or option.name,
@@ -485,7 +517,7 @@ local function recipe_usable_in_building(recipe, building_prototype)
   return categories[recipe.category] == true
 end
 
-local function build_recipe_options(force, item_name, building_name)
+local function build_recipe_options(force, item_name, building_name, surface)
   if not (item_name and building_name) then
     return { names = { nil }, labels = { "Unavailable" } }
   end
@@ -498,7 +530,10 @@ local function build_recipe_options(force, item_name, building_name)
   local names = {}
   for recipe_name, recipe in pairs(force.recipes) do
     if recipe_outputs_item(recipe, item_name) and recipe_usable_in_building(recipe, building_prototype) then
-      table.insert(names, recipe_name)
+      local compatible = is_recipe_compatible_with_surface(recipe, surface)
+      if compatible then
+        table.insert(names, recipe_name)
+      end
     end
   end
 
@@ -872,6 +907,14 @@ local function build_chest_options(force, is_input)
   return { names = names, labels = labels, uncertain = false }
 end
 
+local function is_valid_selection(selection, list)
+  if not selection then return false end
+  for _, name in ipairs(list) do
+    if name == selection then return true end
+  end
+  return false
+end
+
 local function build_gui(player)
   ensure_global()
   destroy_gui(player)
@@ -880,7 +923,7 @@ local function build_gui(player)
   local existing_options = storage and storage.options[player.index]
 
   local options = {
-    buildings = build_building_options(player.force, existing_options and existing_options.item_selection),
+    buildings = build_building_options(player.force, existing_options and existing_options.item_selection, player.surface),
     recipes = { names = { nil }, labels = { "Unavailable" } },
     input_chests = build_chest_options(player.force, true),
     output_chests = build_chest_options(player.force, false),
@@ -897,20 +940,12 @@ local function build_gui(player)
     is_initializing = true,
   }
 
-  local function is_valid_selection(selection, list)
-    if not selection then return false end
-    for _, name in ipairs(list) do
-      if name == selection then return true end
-    end
-    return false
-  end
-
   if not is_valid_selection(options.building_selection, options.buildings.names) then
     options.building_selection = options.buildings.names[1]
   end
 
   if options.item_selection and options.building_selection then
-    options.recipes = build_recipe_options(player.force, options.item_selection, options.building_selection)
+    options.recipes = build_recipe_options(player.force, options.item_selection, options.building_selection, player.surface)
   end
 
   if options.recipe_selection_index > #options.recipes.names then
@@ -1094,7 +1129,7 @@ local function refresh_building_dropdown(player, item_name)
     return
   end
 
-  options.buildings = build_building_options(player.force, item_name)
+  options.buildings = build_building_options(player.force, item_name, player.surface)
   options.building_selection = options.buildings.names[1]
   render_building_buttons(frame, options)
 end
@@ -1113,7 +1148,7 @@ local function refresh_recipe_buttons(player, item_name)
   end
 
   local building_name = options.building_selection
-  options.recipes = build_recipe_options(player.force, item_name, building_name)
+  options.recipes = build_recipe_options(player.force, item_name, building_name, player.surface)
 
   -- Reset recipe selection index if it's out of range
   if options.recipe_selection_index > #options.recipes.names then
@@ -1179,11 +1214,13 @@ local function handle_create_click(player)
   if recipe_name then
     local selected = player.force.recipes[recipe_name]
     if selected and recipe_outputs_item(selected, item_name) and recipe_usable_in_building(selected, building_prototype) then
-      recipe = selected
+      if is_recipe_compatible_with_surface(selected, player.surface) then
+        recipe = selected
+      end
     end
   end
   if not recipe then
-    recipe = find_recipe_for_item(player.force, item_name, building_prototype)
+    recipe = find_recipe_for_item(player.force, item_name, building_prototype, player.surface)
   end
   if not recipe then
     player.print("Quick Mall: no enabled recipe for that item using the selected building.")
