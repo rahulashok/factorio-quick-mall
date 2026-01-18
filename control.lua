@@ -258,6 +258,18 @@ local function find_child_by_name(element, name)
   return nil
 end
 
+local function has_solid_inputs(recipe)
+  if not recipe then return false end
+  for _, ingredient in pairs(recipe.ingredients or {}) do
+    local name = ingredient.name or ingredient[1]
+    local ingredient_type = ingredient.type or "item"
+    if ingredient_type == "item" and name then
+      return true
+    end
+  end
+  return false
+end
+
 local function render_building_buttons(frame, options)
   local building_icons = frame and find_child_by_name(frame, GUI_BUILDING_FLOW)
   if not building_icons then
@@ -283,13 +295,21 @@ local function render_building_buttons(frame, options)
   end
 end
 
-local function render_input_chest_buttons(frame, options)
+local function render_input_chest_buttons(frame, options, force)
   local input_icons = frame and find_child_by_name(frame, GUI_INPUT_FLOW)
   if not input_icons then
     return
   end
 
   input_icons.clear()
+
+  local recipe_name = options.recipes.names[options.recipe_selection_index]
+  local recipe = recipe_name and force.recipes[recipe_name]
+  
+  if recipe and not has_solid_inputs(recipe) then
+    input_icons.add({ type = "label", caption = "No solid input items" })
+    return
+  end
 
   for _, chest_name in ipairs(options.input_chests.names) do
     local button = input_icons.add({
@@ -695,18 +715,26 @@ local function build_blueprint_entities(
     },
   })
 
-  add_entity({
-    name = input_chest,
-    position = { x = base_position.x - chest_offset, y = base_position.y },
-    request_filters = {
-      sections = {
-          {
-              index = 1,
-              filters = request_filters
-          }
-      }
-  },    
-  })
+  if #request_list > 0 and input_chest then
+    add_entity({
+      name = input_chest,
+      position = { x = base_position.x - chest_offset, y = base_position.y },
+      request_filters = {
+        sections = {
+            {
+                index = 1,
+                filters = request_filters
+            }
+        }
+    },    
+    })
+
+    add_entity({
+      name = inserter_name,
+      position = { x = base_position.x - inserter_offset, y = base_position.y },
+      direction = defines.direction.east,
+    })
+  end
 
   add_entity({
     name = output_chest,
@@ -715,14 +743,8 @@ local function build_blueprint_entities(
 
   add_entity({
     name = inserter_name,
-    position = { x = base_position.x - inserter_offset, y = base_position.y },
-    direction = defines.direction.west,
-  })
-
-  add_entity({
-    name = inserter_name,
     position = { x = base_position.x - inserter_offset, y = base_position.y + 1 },
-    direction = defines.direction.east,
+    direction = defines.direction.west,
   })
 
   return entities
@@ -761,13 +783,12 @@ local function give_blueprint_cursor(player, entities, request_list)
     if not stack.valid_for_read or not stack.is_blueprint then
       return false
     end
-    local missing = validate_entity_names({
-      entities[1].name,
-      entities[2].name,
-      entities[3].name,
-      entities[4].name,
-      entities[5].name,
-    })
+    local entity_names = {}
+    for _, entity in ipairs(entities) do
+      table.insert(entity_names, entity.name)
+    end
+    
+    local missing = validate_entity_names(entity_names)
     if #missing > 0 then
       return false
     end
@@ -946,7 +967,7 @@ local function build_gui(player)
   if not is_valid_selection(options.input_chest_selection, options.input_chests.names) then
     options.input_chest_selection = options.input_chests.names[1]
   end
-  render_input_chest_buttons(frame, options)
+  render_input_chest_buttons(frame, options, player.force)
 
   if not is_valid_selection(options.output_chest_selection, options.output_chests.names) then
     options.output_chest_selection = options.output_chests.names[1]
@@ -1024,6 +1045,7 @@ local function refresh_recipe_buttons(player, item_name)
   
   options.recipe_selection_index = new_index
   render_recipe_buttons(frame, options)
+  render_input_chest_buttons(frame, options, player.force)
 end
 
 local function handle_create_click(player)
@@ -1062,25 +1084,9 @@ local function handle_create_click(player)
   local output_chest = options.output_chest_selection
   local inserter_name = options.inserter_selection
 
-  if not (building_name and input_chest and output_chest and inserter_name) then
-    player.print("Quick Mall: some selected entities are not available.")
-    return
-  end
-
   local building_prototype = resolve_entity_prototype(building_name)
   if not building_prototype then
     player.print("Quick Mall: selected building is not available.")
-    return
-  end
-
-  local missing = validate_entity_names({
-    building_name,
-    input_chest,
-    output_chest,
-    inserter_name,
-  })
-  if #missing > 0 then
-    player.print("Quick Mall: selected entities are not available: " .. table.concat(missing, ", "))
     return
   end
 
@@ -1101,12 +1107,34 @@ local function handle_create_click(player)
     return
   end
 
+  local request_list = get_item_requests(player, recipe, quality_name)
+  local needs_input_chest = #request_list > 0
+
+  if not (building_name and output_chest and inserter_name) or (needs_input_chest and not input_chest) then
+    player.print("Quick Mall: some selected entities are not available.")
+    return
+  end
+
+  local entities_to_validate = {
+    building_name,
+    output_chest,
+    inserter_name,
+  }
+  if needs_input_chest then
+    table.insert(entities_to_validate, input_chest)
+  end
+
+  local missing = validate_entity_names(entities_to_validate)
+  if #missing > 0 then
+    player.print("Quick Mall: selected entities are not available: " .. table.concat(missing, ", "))
+    return
+  end
+
   local tile_width = select(1, get_entity_tile_size(building_prototype))
   local half_width = math.floor(tile_width / 2)
   local inserter_offset = half_width + 1
   local chest_offset = half_width + 2
 
-  local request_list = get_item_requests(player, recipe, quality_name)
   local entities = build_blueprint_entities(
     { x = 0, y = 0 },
     building_name,
@@ -1223,6 +1251,7 @@ script.on_event(defines.events.on_gui_click, function(event)
 
       local frame = player.gui.screen[GUI_ROOT]
       render_recipe_buttons(frame, options)
+      render_input_chest_buttons(frame, options, player.force)
     elseif event.element.name:find(GUI_INPUT_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]
