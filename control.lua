@@ -13,6 +13,7 @@ local GUI_INPUT_FLOW = "quick-mall-input-flow"
 local GUI_INPUT_PREFIX = "quick-mall-input-"
 local GUI_OUTPUT_FLOW = "quick-mall-output-flow"
 local GUI_OUTPUT_PREFIX = "quick-mall-output-"
+local GUI_QUALITY_WARNING = "quick-mall-quality-warning"
 local GUI_CREATE = "quick-mall-create"
 local GUI_CLOSE = "quick-mall-close"
 
@@ -290,6 +291,32 @@ local function has_solid_outputs(recipe)
     end
   end
   return false
+end
+
+local function update_quality_warning(player, frame, options)
+  local warning_label = frame and find_child_by_name(frame, GUI_QUALITY_WARNING)
+  if not warning_label then return end
+
+  local item_value = options.item_selection
+  local quality_name = "normal"
+  if type(item_value) == "table" then
+    quality_name = item_value.quality or "normal"
+  end
+
+  if quality_name == "normal" then
+    warning_label.visible = false
+    return
+  end
+
+  local recipe_name = options.recipes.names[options.recipe_selection_index]
+  local recipe = recipe_name and player.force.recipes[recipe_name]
+  
+  if recipe and not has_solid_inputs(recipe) then
+    warning_label.visible = true
+    warning_label.caption = "Note: Recipes with only fluid inputs cannot produce higher than normal quality. Output will be normal quality."
+  else
+    warning_label.visible = false
+  end
 end
 
 local function render_building_buttons(frame, options)
@@ -1135,6 +1162,15 @@ local function build_gui(player)
     button.toggled = (options.inserter_selection == inserter_name)
   end
 
+  local warning_label = content.add({
+    type = "label",
+    name = GUI_QUALITY_WARNING,
+    caption = "",
+  })
+  warning_label.style.font_color = {r = 1, g = 0.5, b = 0}
+  warning_label.style.single_line = false
+  warning_label.visible = false
+
   local button_flow = content.add({ type = "flow", direction = "horizontal" })
   button_flow.style.horizontal_align = "right"
   button_flow.add({
@@ -1145,6 +1181,7 @@ local function build_gui(player)
 
   player.opened = frame
 
+  update_quality_warning(player, frame, options)
   render_building_buttons(frame, options)
   render_recipe_buttons(frame, options)
 
@@ -1228,6 +1265,7 @@ local function refresh_recipe_buttons(player, item_name)
   end
   
   options.recipe_selection_index = new_index
+  update_quality_warning(player, frame, options)
   render_recipe_buttons(frame, options)
   render_input_chest_buttons(frame, options, player.force)
   render_output_chest_buttons(frame, options, player.force)
@@ -1290,6 +1328,11 @@ local function handle_create_click(player)
   if not recipe then
     player.print("Quick Mall: no enabled recipe for that item using the selected building.")
     return
+  end
+
+  if quality_name ~= "normal" and not has_solid_inputs(recipe) then
+    player.print("Quick Mall: Recipes with only fluid inputs cannot produce higher than normal quality. Output quality has been reset to normal.")
+    quality_name = "normal"
   end
 
   local request_list = get_item_requests(player, recipe, quality_name)
@@ -1457,6 +1500,7 @@ script.on_event(defines.events.on_gui_click, function(event)
       options.recipe_selection_index = index
 
       local frame = player.gui.screen[GUI_ROOT]
+      update_quality_warning(player, frame, options)
       render_recipe_buttons(frame, options)
       render_input_chest_buttons(frame, options, player.force)
       render_output_chest_buttons(frame, options, player.force)
