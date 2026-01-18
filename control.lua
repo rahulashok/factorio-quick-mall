@@ -306,9 +306,9 @@ local function update_quality_warning(player, frame, options)
     if is_fluid and quality_name ~= "normal" then
       warning_label.visible = true
       warning_label.caption = "Note: Fluids do not possess quality. Output fluid will be of normal quality."
-    elseif not has_solid_inputs(recipe) then
+    elseif not has_solid_inputs(recipe) and quality_name ~= "normal" then
       warning_label.visible = true
-      warning_label.caption = "Note: Recipes with only fluid inputs cannot produce outputs ofhigher than normal quality. Output will be of normal quality."
+      warning_label.caption = "Note: Recipes with only fluid inputs cannot produce outputs of higher than normal quality. Output will be of normal quality."
     else
       warning_label.visible = false
     end
