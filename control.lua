@@ -9,6 +9,10 @@ local GUI_BUILDING_FLOW = "quick-mall-building-flow"
 local GUI_BUILDING_PREFIX = "quick-mall-building-"
 local GUI_INSERTER_FLOW = "quick-mall-inserter-flow"
 local GUI_INSERTER_PREFIX = "quick-mall-inserter-"
+local GUI_INPUT_FLOW = "quick-mall-input-flow"
+local GUI_INPUT_PREFIX = "quick-mall-input-"
+local GUI_OUTPUT_FLOW = "quick-mall-output-flow"
+local GUI_OUTPUT_PREFIX = "quick-mall-output-"
 local GUI_CREATE = "quick-mall-create"
 local GUI_CLOSE = "quick-mall-close"
 
@@ -258,6 +262,46 @@ local function render_building_buttons(frame, options)
   end
 end
 
+local function render_input_chest_buttons(frame, options)
+  local input_icons = frame and find_child_by_name(frame, GUI_INPUT_FLOW)
+  if not input_icons then
+    return
+  end
+
+  input_icons.clear()
+
+  for _, chest_name in ipairs(options.input_chests.names) do
+    local button = input_icons.add({
+      type = "sprite-button",
+      name = GUI_INPUT_PREFIX .. chest_name,
+      sprite = "entity/" .. chest_name,
+      style = "slot_button",
+      tooltip = get_localised_entity_name(chest_name),
+    })
+    button.toggled = (options.input_chest_selection == chest_name)
+  end
+end
+
+local function render_output_chest_buttons(frame, options)
+  local output_icons = frame and find_child_by_name(frame, GUI_OUTPUT_FLOW)
+  if not output_icons then
+    return
+  end
+
+  output_icons.clear()
+
+  for _, chest_name in ipairs(options.output_chests.names) do
+    local button = output_icons.add({
+      type = "sprite-button",
+      name = GUI_OUTPUT_PREFIX .. chest_name,
+      sprite = "entity/" .. chest_name,
+      style = "slot_button",
+      tooltip = get_localised_entity_name(chest_name),
+    })
+    button.toggled = (options.output_chest_selection == chest_name)
+  end
+end
+
 local function find_recipe_for_item(force, item_name, building_prototype)
   for _, recipe in pairs(force.recipes) do
     if recipe.enabled then
@@ -419,12 +463,14 @@ local function get_item_requests(player, recipe)
   local requests = {}
   local index = 1
   for _, ingredient in pairs(recipe.ingredients or {}) do
+    local name = ingredient.name or ingredient[1]
     local ingredient_type = ingredient.type or "item"
-    if ingredient_type == "item" then
-      local prototype = resolve_item_prototype(ingredient.name)
+    if ingredient_type == "item" and name then
+      local prototype = resolve_item_prototype(name)
       local stack_size = (prototype and prototype.stack_size) or 1
-      local count = math.max(1, stack_size)
-      table.insert(requests, { index = index, name = ingredient.name, count = count, quality = "normal", comparator = "=" })
+      -- Request 1 full stack of each input
+      local count = stack_size
+      table.insert(requests, { index = index, name = name, count = count, quality = "normal", comparator = "=" })
       index = index + 1
     end
   end
@@ -669,21 +715,21 @@ local function build_gui(player)
 
   local input_flow = content.add({ type = "flow", direction = "horizontal" })
   input_flow.add({ type = "label", caption = "Input chest: " })
-  input_flow.add({
-    type = "drop-down",
-    name = GUI_INPUT_CHEST,
-    items = options.input_chests.labels,
-    selected_index = 1,
+  local input_icons = input_flow.add({
+    type = "flow",
+    name = GUI_INPUT_FLOW,
+    direction = "horizontal",
   })
+  input_icons.style.horizontal_spacing = 4
 
   local output_flow = content.add({ type = "flow", direction = "horizontal" })
   output_flow.add({ type = "label", caption = "Output chest: " })
-  output_flow.add({
-    type = "drop-down",
-    name = GUI_OUTPUT_CHEST,
-    items = options.output_chests.labels,
-    selected_index = 1,
+  local output_icons = output_flow.add({
+    type = "flow",
+    name = GUI_OUTPUT_FLOW,
+    direction = "horizontal",
   })
+  output_icons.style.horizontal_spacing = 4
 
   local inserter_flow = content.add({ type = "flow", direction = "horizontal" })
   inserter_flow.add({ type = "label", caption = "Inserter: " })
@@ -719,6 +765,16 @@ local function build_gui(player)
     options.building_selection = options.buildings.names[1]
   end
   render_building_buttons(frame, options)
+
+  if #options.input_chests.names > 0 then
+    options.input_chest_selection = options.input_chests.names[1]
+  end
+  render_input_chest_buttons(frame, options)
+
+  if #options.output_chests.names > 0 then
+    options.output_chest_selection = options.output_chests.names[1]
+  end
+  render_output_chest_buttons(frame, options)
 
   if options.inserters.names[1] then
     options.inserter_selection = options.inserters.names[1]
@@ -792,8 +848,6 @@ local function handle_create_click(player)
 
   local item_elem = find_child_by_name(frame, GUI_ITEM)
   local recipe_elem = find_child_by_name(frame, GUI_RECIPE)
-  local input_elem = find_child_by_name(frame, GUI_INPUT_CHEST)
-  local output_elem = find_child_by_name(frame, GUI_OUTPUT_CHEST)
 
   local item_name = item_elem and item_elem.elem_value
   if not item_name then
@@ -803,8 +857,8 @@ local function handle_create_click(player)
 
   local building_name = options.building_selection
   local recipe_name = recipe_elem and options.recipes.names[recipe_elem.selected_index] or nil
-  local input_chest = options.input_chests.names[input_elem.selected_index]
-  local output_chest = options.output_chests.names[output_elem.selected_index]
+  local input_chest = options.input_chest_selection
+  local output_chest = options.output_chest_selection
   local inserter_name = options.inserter_selection
 
   if not (building_name and input_chest and output_chest and inserter_name) then
@@ -952,6 +1006,30 @@ script.on_event(defines.events.on_gui_click, function(event)
       local item_elem = find_child_by_name(frame, GUI_ITEM)
       local item_name = item_elem and item_elem.elem_value
       refresh_recipe_dropdown(player, item_name)
+    elseif event.element.name:find(GUI_INPUT_PREFIX, 1, true) == 1 then
+      local storage = get_storage_root()
+      local options = storage and storage.options[player.index]
+      if not options then
+        return
+      end
+
+      local chest_name = event.element.name:sub(#GUI_INPUT_PREFIX + 1)
+      options.input_chest_selection = chest_name
+
+      local frame = player.gui.screen[GUI_ROOT]
+      render_input_chest_buttons(frame, options)
+    elseif event.element.name:find(GUI_OUTPUT_PREFIX, 1, true) == 1 then
+      local storage = get_storage_root()
+      local options = storage and storage.options[player.index]
+      if not options then
+        return
+      end
+
+      local chest_name = event.element.name:sub(#GUI_OUTPUT_PREFIX + 1)
+      options.output_chest_selection = chest_name
+
+      local frame = player.gui.screen[GUI_ROOT]
+      render_output_chest_buttons(frame, options)
     elseif event.element.name:find(GUI_INSERTER_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]
