@@ -330,9 +330,8 @@ local function find_recipe_for_item(force, item_name, building_prototype)
 end
 
 local function build_building_options(force, item_name)
-  local names = {}
-  local labels = {}
   local prototypes = get_entity_prototypes()
+  local entries = {}
   local found_names = {}
 
   if prototypes then
@@ -363,20 +362,28 @@ local function build_building_options(force, item_name)
 
       if is_valid then
         if not item_name or find_recipe_for_item(force, item_name, prototype) then
-          table.insert(names, name)
+          table.insert(entries, {
+            name = name,
+            label = prototype.localised_name or name,
+            order = prototype.order or "z"
+          })
           found_names[name] = true
         end
       end
     end
   end
 
-  if #names == 0 then
+  if #entries == 0 then
     for _, option in ipairs(STATIC_BUILDING_CANDIDATES) do
       if not found_names[option.name] then
         local prototype = resolve_entity_prototype(option.name)
         if prototype then
           if not item_name or find_recipe_for_item(force, item_name, prototype) then
-            table.insert(names, option.name)
+            table.insert(entries, {
+              name = option.name,
+              label = prototype.localised_name or option.name,
+              order = prototype.order or "z"
+            })
             found_names[option.name] = true
           end
         end
@@ -384,16 +391,15 @@ local function build_building_options(force, item_name)
     end
   end
 
-  table.sort(names)
+  table.sort(entries, function(a, b)
+    return a.order < b.order
+  end)
 
-  for _, name in ipairs(names) do
-    local prototype = resolve_entity_prototype(name)
-    local localised_name = prototype and prototype.localised_name
-    if localised_name then
-      table.insert(labels, localised_name)
-    else
-      table.insert(labels, name)
-    end
+  local names = {}
+  local labels = {}
+  for _, entry in ipairs(entries) do
+    table.insert(names, entry.name)
+    table.insert(labels, entry.label)
   end
 
   if #names == 0 then
@@ -674,78 +680,98 @@ local function give_blueprint_cursor(player, entities, request_list)
 end
 
 local function build_chest_options(force, is_input)
-  local names = {}
-  local labels = {}
   local prototypes = get_entity_prototypes()
+  local entries = {}
   local found_names = {}
 
   if prototypes then
-    local all_names = {}
-    for name, _ in pairs(prototypes) do
-      table.insert(all_names, name)
-    end
-    table.sort(all_names)
-
-    for _, name in ipairs(all_names) do
-      local proto = prototypes[name]
-      if proto then
-        local is_valid = false
-        local type = proto.type
-        
-        if type == "logistic-container" then
-          local mode = proto.logistic_mode
-          if is_input then
-            -- Input: Requester, Buffer
-            if mode == "requester" or mode == "buffer" then
-              is_valid = true
-            end
-          else
-            -- Output: Any logistic chest
+    for name, proto in pairs(prototypes) do
+      local is_valid = false
+      local type = proto.type
+      
+      if type == "logistic-container" then
+        local mode = proto.logistic_mode
+        if is_input then
+          if mode == "requester" or mode == "buffer" then
             is_valid = true
           end
-        elseif not is_input and type == "container" then
-          -- Output: Any regular container
+        else
           is_valid = true
         end
+      elseif not is_input and type == "container" then
+        is_valid = true
+      end
 
-        if is_valid then
-          -- Filter out hidden ones and those that aren't place-able by the player
-          local is_hidden = false
-          pcall(function()
-            if proto.has_flag("hidden") then
-              is_hidden = true
+      if is_valid then
+        local is_hidden = false
+        pcall(function()
+          if proto.has_flag("hidden") then
+            is_hidden = true
+          end
+        end)
+
+        local placeable = false
+        if proto.items_to_place_this and #proto.items_to_place_this > 0 then
+          placeable = true
+        end
+
+        if not is_hidden and placeable then
+          local lower_name = name:lower()
+          if lower_name:find("bottomless", 1, true) or 
+             lower_name:find("debug", 1, true) or 
+             lower_name:find("cheat", 1, true) or
+             lower_name:find("editor", 1, true) then
+            placeable = false
+          end
+        end
+
+        if not is_hidden and placeable then
+          local sort_weight = 100
+          if type == "logistic-container" then
+            local mode = proto.logistic_mode
+            if mode == "requester" then sort_weight = 10
+            elseif mode == "buffer" then sort_weight = 20
+            elseif mode == "passive-provider" then sort_weight = 30
+            elseif mode == "active-provider" then sort_weight = 40
+            elseif mode == "storage" then sort_weight = 50
             end
-          end)
-
-          local placeable = false
-          if proto.items_to_place_this and #proto.items_to_place_this > 0 then
-            placeable = true
-          end
-
-          if not is_hidden and placeable then
-            -- Exclude "cheat" or "debug" chests that aren't intended for normal play
-            local lower_name = name:lower()
-            if lower_name:find("bottomless", 1, true) or 
-               lower_name:find("debug", 1, true) or 
-               lower_name:find("cheat", 1, true) or
-               lower_name:find("editor", 1, true) then
-              placeable = false
+          elseif type == "container" then
+            if name:find("steel") then sort_weight = 60
+            elseif name:find("iron") then sort_weight = 70
+            elseif name:find("wood") then sort_weight = 80
+            else sort_weight = 90
             end
           end
 
-          if not is_hidden and placeable then
-            table.insert(names, name)
-            table.insert(labels, proto.localised_name or name)
-            found_names[name] = true
-          end
+          table.insert(entries, {
+            name = name,
+            label = proto.localised_name or name,
+            order = proto.order or "z",
+            weight = sort_weight
+          })
+          found_names[name] = true
         end
       end
     end
   end
 
-  if #names == 0 then
+  if #entries == 0 then
     local candidates = is_input and INPUT_CHEST_CANDIDATES or OUTPUT_CHEST_CANDIDATES
     return build_option_list(candidates)
+  end
+
+  table.sort(entries, function(a, b)
+    if a.weight ~= b.weight then
+      return a.weight > b.weight
+    end
+    return a.order > b.order
+  end)
+
+  local names = {}
+  local labels = {}
+  for _, entry in ipairs(entries) do
+    table.insert(names, entry.name)
+    table.insert(labels, entry.label)
   end
 
   return { names = names, labels = labels, uncertain = false }
