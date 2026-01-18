@@ -282,28 +282,19 @@ local function has_solid_outputs(recipe)
   return false
 end
 
-local function has_solid_outputs(recipe)
-  if not recipe then return false end
-  local products = recipe.products or {}
-  for _, product in pairs(products) do
-    if product.type == "item" then
-      return true
-    end
-  end
-  return false
-end
-
 local function update_quality_warning(player, frame, options)
   local warning_label = frame and find_child_by_name(frame, GUI_QUALITY_WARNING)
   if not warning_label then return end
 
   local item_value = options.item_selection
   local quality_name = "normal"
+  local is_fluid = false
   if type(item_value) == "table" then
     quality_name = item_value.quality or "normal"
+    is_fluid = (item_value.type == "fluid")
   end
 
-  if quality_name == "normal" then
+  if quality_name == "normal" and not is_fluid then
     warning_label.visible = false
     return
   end
@@ -312,12 +303,12 @@ local function update_quality_warning(player, frame, options)
   local recipe = recipe_name and player.force.recipes[recipe_name]
   
   if recipe then
-    if not has_solid_inputs(recipe) then
+    if is_fluid and quality_name ~= "normal" then
       warning_label.visible = true
-      warning_label.caption = "Note: Recipes with only fluid inputs cannot produce higher than normal quality. Output will be normal quality."
-    elseif not has_solid_outputs(recipe) then
+      warning_label.caption = "Note: Fluids do not possess quality. Output fluid will be of normal quality."
+    elseif not has_solid_inputs(recipe) then
       warning_label.visible = true
-      warning_label.caption = "Note: Fluids do not possess quality. Output fluid will be normal quality."
+      warning_label.caption = "Note: Recipes with only fluid inputs cannot produce outputs ofhigher than normal quality. Output will be of normal quality."
     else
       warning_label.visible = false
     end
@@ -1342,7 +1333,7 @@ local function handle_create_click(player)
     quality_name = "normal"
   end
 
-  if quality_name ~= "normal" and not has_solid_outputs(recipe) then
+  if is_fluid and quality_name ~= "normal" then
     -- Quick Mall: Fluids do not possess quality. Output quality has been reset to normal.
     quality_name = "normal"
   end
