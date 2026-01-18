@@ -13,8 +13,6 @@ local GUI_INPUT_FLOW = "quick-mall-input-flow"
 local GUI_INPUT_PREFIX = "quick-mall-input-"
 local GUI_OUTPUT_FLOW = "quick-mall-output-flow"
 local GUI_OUTPUT_PREFIX = "quick-mall-output-"
-local GUI_QUALITY_FLOW = "quick-mall-quality-flow"
-local GUI_QUALITY_PREFIX = "quick-mall-quality-"
 local GUI_CREATE = "quick-mall-create"
 local GUI_CLOSE = "quick-mall-close"
 
@@ -339,12 +337,17 @@ local function is_recipe_compatible_with_surface(recipe, surface)
 end
 
 local function find_recipe_for_item(force, item_name, building_prototype, surface)
+  local name_to_check = item_name
+  if type(item_name) == "table" then
+    name_to_check = item_name.name
+  end
+
   for _, recipe in pairs(force.recipes) do
     local compatible = is_recipe_compatible_with_surface(recipe, surface)
     if recipe.enabled and compatible then
       local products = recipe.products or {}
       for _, product in pairs(products) do
-        if product.type == "item" and product.name == item_name then
+        if product.type == "item" and product.name == name_to_check then
           if not building_prototype then
             return recipe
           end
@@ -359,32 +362,6 @@ local function find_recipe_for_item(force, item_name, building_prototype, surfac
   end
 
   return nil
-end
-
-local function render_quality_buttons(frame, options)
-  local quality_icons = frame and find_child_by_name(frame, GUI_QUALITY_FLOW)
-  if not quality_icons then
-    return
-  end
-
-  quality_icons.clear()
-
-  if #options.qualities <= 1 then
-    quality_icons.parent.visible = false
-    return
-  end
-  quality_icons.parent.visible = true
-
-  for _, quality in ipairs(options.qualities) do
-    local button = quality_icons.add({
-      type = "sprite-button",
-      name = GUI_QUALITY_PREFIX .. quality.name,
-      sprite = "quality/" .. quality.name,
-      style = "slot_button",
-      tooltip = quality.localised_name,
-    })
-    button.toggled = (options.quality_selection == quality.name)
-  end
 end
 
 local function render_recipe_buttons(frame, options)
@@ -413,6 +390,11 @@ local function render_recipe_buttons(frame, options)
 end
 
 local function build_building_options(force, item_name, surface)
+  local name_to_check = item_name
+  if type(item_name) == "table" then
+    name_to_check = item_name.name
+  end
+
   local prototypes = get_entity_prototypes()
   local entries = {}
   local found_names = {}
@@ -516,7 +498,12 @@ local function recipe_usable_in_building(recipe, building_prototype)
 end
 
 local function build_recipe_options(force, item_name, building_name, surface)
-  if not (item_name and building_name) then
+  local name_to_check = item_name
+  if type(item_name) == "table" then
+    name_to_check = item_name.name
+  end
+
+  if not (name_to_check and building_name) then
     return { names = { nil }, labels = { "Unavailable" } }
   end
 
@@ -527,7 +514,7 @@ local function build_recipe_options(force, item_name, building_name, surface)
 
   local names = {}
   for recipe_name, recipe in pairs(force.recipes) do
-    if recipe_outputs_item(recipe, item_name) and recipe_usable_in_building(recipe, building_prototype) then
+    if recipe_outputs_item(recipe, name_to_check) and recipe_usable_in_building(recipe, building_prototype) then
       local compatible = is_recipe_compatible_with_surface(recipe, surface)
       if compatible then
         table.insert(names, recipe_name)
@@ -780,33 +767,6 @@ local function give_blueprint_cursor(player, entities, request_list)
   return false
 end
 
-local function get_quality_options()
-  local qualities = {}
-  
-  -- Factorio 2.0+
-  if prototypes and prototypes.quality then
-    local sorted = {}
-    for name, proto in pairs(prototypes.quality) do
-      table.insert(sorted, proto)
-    end
-    table.sort(sorted, function(a, b)
-      return (a.level or 0) < (b.level or 0)
-    end)
-    for _, proto in ipairs(sorted) do
-      if not proto.hidden then
-        table.insert(qualities, { name = proto.name, localised_name = proto.localised_name })
-      end
-    end
-  end
-
-  -- Fallback for 1.1 or if no qualities found (just normal)
-  if #qualities == 0 then
-    table.insert(qualities, { name = "normal", localised_name = "Normal" })
-  end
-
-  return qualities
-end
-
 local function build_chest_options(force, is_input)
   local prototypes = get_entity_prototypes()
   local entries = {}
@@ -926,14 +886,12 @@ local function build_gui(player)
     input_chests = build_chest_options(player.force, true),
     output_chests = build_chest_options(player.force, false),
     inserters = build_option_list(INSERTER_CANDIDATES),
-    qualities = get_quality_options(),
     item_selection = existing_options and existing_options.item_selection,
     building_selection = existing_options and existing_options.building_selection,
     recipe_selection_index = existing_options and existing_options.recipe_selection_index or 1,
     input_chest_selection = existing_options and existing_options.input_chest_selection,
     output_chest_selection = existing_options and existing_options.output_chest_selection,
     inserter_selection = existing_options and existing_options.inserter_selection,
-    quality_selection = existing_options and existing_options.quality_selection or "normal",
     prototype_resolution_uncertain = false,
     is_initializing = true,
   }
@@ -988,7 +946,7 @@ local function build_gui(player)
   local item_picker = item_flow.add({
     type = "choose-elem-button",
     name = GUI_ITEM,
-    elem_type = "item",
+    elem_type = "item-with-quality",
     tooltip = "Choose the item to craft.",
   })
   
@@ -997,15 +955,6 @@ local function build_gui(player)
   end
 
   options.is_initializing = false
-
-  local quality_flow = content.add({ type = "flow", direction = "horizontal" })
-  quality_flow.add({ type = "label", caption = "Item Quality: " })
-  local quality_icons = quality_flow.add({
-    type = "flow",
-    name = GUI_QUALITY_FLOW,
-    direction = "horizontal",
-  })
-  quality_icons.style.horizontal_spacing = 4
 
   local building_flow = content.add({ type = "flow", direction = "horizontal" })
   building_flow.add({ type = "label", caption = "Building: " })
@@ -1085,19 +1034,6 @@ local function build_gui(player)
     options.output_chest_selection = options.output_chests.names[1]
   end
   render_output_chest_buttons(frame, options)
-
-  local function is_valid_quality(selection, list)
-    if not selection then return false end
-    for _, q in ipairs(list) do
-      if q.name == selection then return true end
-    end
-    return false
-  end
-
-  if not is_valid_quality(options.quality_selection, options.qualities) then
-    options.quality_selection = "normal"
-  end
-  render_quality_buttons(frame, options)
 
   if not is_valid_selection(options.inserter_selection, options.inserters.names) then
     options.inserter_selection = options.inserters.names[1]
@@ -1189,10 +1125,17 @@ local function handle_create_click(player)
 
   local item_elem = find_child_by_name(frame, GUI_ITEM)
 
-  local item_name = item_elem and item_elem.elem_value
-  if not item_name then
+  local item_value = item_elem and item_elem.elem_value
+  if not item_value then
     player.print("Quick Mall: choose an item first.")
     return
+  end
+
+  local item_name = item_value
+  local quality_name = "normal"
+  if type(item_value) == "table" then
+    item_name = item_value.name
+    quality_name = item_value.quality or "normal"
   end
 
   local building_name = options.building_selection
@@ -1200,7 +1143,6 @@ local function handle_create_click(player)
   local input_chest = options.input_chest_selection
   local output_chest = options.output_chest_selection
   local inserter_name = options.inserter_selection
-  local quality_name = options.quality_selection
 
   if not (building_name and input_chest and output_chest and inserter_name) then
     player.print("Quick Mall: some selected entities are not available.")
@@ -1387,18 +1329,6 @@ script.on_event(defines.events.on_gui_click, function(event)
 
       local frame = player.gui.screen[GUI_ROOT]
       render_output_chest_buttons(frame, options)
-    elseif event.element.name:find(GUI_QUALITY_PREFIX, 1, true) == 1 then
-      local storage = get_storage_root()
-      local options = storage and storage.options[player.index]
-      if not options then
-        return
-      end
-
-      local quality_name = event.element.name:sub(#GUI_QUALITY_PREFIX + 1)
-      options.quality_selection = quality_name
-
-      local frame = player.gui.screen[GUI_ROOT]
-      render_quality_buttons(frame, options)
     elseif event.element.name:find(GUI_INSERTER_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]
@@ -1439,8 +1369,15 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
       options.item_selection = event.element.elem_value
       options.recipe_selection_index = 1
     end
-    refresh_building_dropdown(player, event.element.elem_value)
-    refresh_recipe_buttons(player, event.element.elem_value)
+    
+    local item_name = event.element.elem_value
+    local name_to_refresh = item_name
+    if type(item_name) == "table" then
+      name_to_refresh = item_name.name
+    end
+
+    refresh_building_dropdown(player, name_to_refresh)
+    refresh_recipe_buttons(player, name_to_refresh)
   end
 end)
 
@@ -1471,8 +1408,13 @@ script.on_event(defines.events.on_player_changed_surface, function(event)
   local storage = get_storage_root()
   local options = storage and storage.options[player.index]
   if options then
-    refresh_building_dropdown(player, options.item_selection)
-    refresh_recipe_buttons(player, options.item_selection)
+    local item_selection = options.item_selection
+    local name_to_refresh = item_selection
+    if type(item_selection) == "table" then
+      name_to_refresh = item_selection.name
+    end
+    refresh_building_dropdown(player, name_to_refresh)
+    refresh_recipe_buttons(player, name_to_refresh)
   end
 end)
 
