@@ -315,29 +315,27 @@ local function is_recipe_compatible_with_surface(recipe, surface)
   local proto = recipe.prototype
   if not proto then return true end
 
-  local is_compatible = true
   local conditions = proto.surface_conditions
-  if conditions then
-    for _, condition in ipairs(conditions) do
-      -- In Factorio 2.0, surface properties are retrieved via get_property(name)
-      local property_value = 0
-      local ok_val, val = pcall(function() return surface.get_property(condition.property) end)
-      if ok_val and val then
-        property_value = val
-      end
-      
-      if condition.min and property_value < condition.min then
-        is_compatible = false
-        break
-      end
-      if condition.max and property_value > condition.max then
-        is_compatible = false
-        break
-      end
+  if not conditions or #conditions == 0 then return true end
+
+  for _, condition in ipairs(conditions) do
+    local property_value = surface.get_property(condition.property)
+    
+    if property_value == nil then
+      -- If the surface doesn't define the property, we treat it as 0
+      -- but only if that's valid for the condition.
+      property_value = 0
+    end
+    
+    if condition.min and property_value < condition.min then
+      return false
+    end
+    if condition.max and property_value > condition.max then
+      return false
     end
   end
   
-  return is_compatible
+  return true
 end
 
 local function find_recipe_for_item(force, item_name, building_prototype, surface)
@@ -1129,8 +1127,15 @@ local function refresh_building_dropdown(player, item_name)
     return
   end
 
+  local old_selection = options.building_selection
   options.buildings = build_building_options(player.force, item_name, player.surface)
-  options.building_selection = options.buildings.names[1]
+  
+  if not is_valid_selection(old_selection, options.buildings.names) then
+    options.building_selection = options.buildings.names[1]
+  else
+    options.building_selection = old_selection
+  end
+  
   render_building_buttons(frame, options)
 end
 
@@ -1148,13 +1153,22 @@ local function refresh_recipe_buttons(player, item_name)
   end
 
   local building_name = options.building_selection
+  local old_recipe_name = options.recipes.names[options.recipe_selection_index]
+  
   options.recipes = build_recipe_options(player.force, item_name, building_name, player.surface)
 
-  -- Reset recipe selection index if it's out of range
-  if options.recipe_selection_index > #options.recipes.names then
-    options.recipe_selection_index = 1
+  -- Try to maintain the previous recipe by name instead of index
+  local new_index = 1
+  if old_recipe_name then
+    for i, name in ipairs(options.recipes.names) do
+      if name == old_recipe_name then
+        new_index = i
+        break
+      end
+    end
   end
-
+  
+  options.recipe_selection_index = new_index
   render_recipe_buttons(frame, options)
 end
 
@@ -1440,6 +1454,25 @@ end)
 script.on_event(defines.events.on_gui_closed, function(event)
   if event.element and event.element.valid and event.element.name == GUI_ROOT then
     event.element.destroy()
+  end
+end)
+
+script.on_event(defines.events.on_player_changed_surface, function(event)
+  local player = game.get_player(event.player_index)
+  if not player then
+    return
+  end
+
+  local frame = player.gui.screen[GUI_ROOT]
+  if not frame then
+    return
+  end
+
+  local storage = get_storage_root()
+  local options = storage and storage.options[player.index]
+  if options then
+    refresh_building_dropdown(player, options.item_selection)
+    refresh_recipe_buttons(player, options.item_selection)
   end
 end)
 
