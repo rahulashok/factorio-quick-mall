@@ -721,6 +721,7 @@ local function give_blueprint_cursor(player, entities, request_list)
       return false
     end
     stack.set_stack({ name = "blueprint" })
+    player.cursor_stack_temporary = true
     if not stack.valid_for_read or not stack.is_blueprint then
       return false
     end
