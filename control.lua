@@ -1,6 +1,5 @@
 local GUI_ROOT = "quick-mall-window"
 local GUI_ITEM = "quick-mall-item"
-local GUI_BUILDING = "quick-mall-building"
 local GUI_RECIPE = "quick-mall-recipe"
 local GUI_INPUT_CHEST = "quick-mall-input-chest"
 local GUI_OUTPUT_CHEST = "quick-mall-output-chest"
@@ -493,7 +492,14 @@ local function build_recipe_options(force, item_name, building_name)
 end
 
 local function get_storage_root()
-  local root = rawget(_G, "global") or rawget(_G, "storage")
+  -- Factorio 2.0 uses 'storage', 1.1 uses 'global'
+  local root = nil
+  if storage then
+    root = storage
+  elseif global then
+    root = global
+  end
+  
   if not root then
     return nil
   end
@@ -843,22 +849,50 @@ local function build_gui(player)
   ensure_global()
   destroy_gui(player)
 
+  local storage = get_storage_root()
+  local existing_options = storage and storage.options[player.index]
+
   local options = {
-    buildings = build_building_options(player.force, nil),
+    buildings = build_building_options(player.force, existing_options and existing_options.item_selection),
     recipes = { names = { nil }, labels = { "Unavailable" } },
     input_chests = build_chest_options(player.force, true),
     output_chests = build_chest_options(player.force, false),
     inserters = build_option_list(INSERTER_CANDIDATES),
     qualities = get_quality_options(),
-    building_selection = nil,
-    inserter_selection = nil,
-    quality_selection = "normal",
+    item_selection = existing_options and existing_options.item_selection,
+    building_selection = existing_options and existing_options.building_selection,
+    recipe_selection_index = existing_options and existing_options.recipe_selection_index or 1,
+    input_chest_selection = existing_options and existing_options.input_chest_selection,
+    output_chest_selection = existing_options and existing_options.output_chest_selection,
+    inserter_selection = existing_options and existing_options.inserter_selection,
+    quality_selection = existing_options and existing_options.quality_selection or "normal",
     prototype_resolution_uncertain = false,
+    is_initializing = true,
   }
+
+  local function is_valid_selection(selection, list)
+    if not selection then return false end
+    for _, name in ipairs(list) do
+      if name == selection then return true end
+    end
+    return false
+  end
+
+  if not is_valid_selection(options.building_selection, options.buildings.names) then
+    options.building_selection = options.buildings.names[1]
+  end
+
+  if options.item_selection and options.building_selection then
+    options.recipes = build_recipe_options(player.force, options.item_selection, options.building_selection)
+  end
+
+  if options.recipe_selection_index > #options.recipes.names then
+    options.recipe_selection_index = 1
+  end
+
   options.prototype_resolution_uncertain = options.input_chests.uncertain
     or options.output_chests.uncertain
     or options.inserters.uncertain
-  local storage = get_storage_root()
   if storage then
     storage.options[player.index] = options
   end
@@ -891,12 +925,18 @@ local function build_gui(player)
 
   local item_flow = content.add({ type = "flow", direction = "horizontal" })
   item_flow.add({ type = "label", caption = "Item: " })
-  item_flow.add({
+  local item_picker = item_flow.add({
     type = "choose-elem-button",
     name = GUI_ITEM,
     elem_type = "item",
     tooltip = "Choose the item to craft.",
   })
+  
+  if options.item_selection then
+    item_picker.elem_value = options.item_selection
+  end
+
+  options.is_initializing = false
 
   local quality_flow = content.add({ type = "flow", direction = "horizontal" })
   quality_flow.add({ type = "label", caption = "Item Quality: " })
@@ -922,7 +962,7 @@ local function build_gui(player)
     type = "drop-down",
     name = GUI_RECIPE,
     items = options.recipes.labels,
-    selected_index = 1,
+    selected_index = options.recipe_selection_index,
   })
 
   local input_flow = content.add({ type = "flow", direction = "horizontal" })
@@ -960,7 +1000,7 @@ local function build_gui(player)
       style = "slot_button",
       tooltip = get_localised_entity_name(inserter_name),
     })
-    button.toggled = false
+    button.toggled = (options.inserter_selection == inserter_name)
   end
 
   local button_flow = content.add({ type = "flow", direction = "horizontal" })
@@ -973,28 +1013,42 @@ local function build_gui(player)
 
   player.opened = frame
 
-  if #options.buildings.names > 0 then
-    options.building_selection = options.buildings.names[1]
-  end
   render_building_buttons(frame, options)
 
-  if #options.input_chests.names > 0 then
+  if not is_valid_selection(options.input_chest_selection, options.input_chests.names) then
     options.input_chest_selection = options.input_chests.names[1]
   end
   render_input_chest_buttons(frame, options)
 
-  if #options.output_chests.names > 0 then
+  if not is_valid_selection(options.output_chest_selection, options.output_chests.names) then
     options.output_chest_selection = options.output_chests.names[1]
   end
   render_output_chest_buttons(frame, options)
 
+  local function is_valid_quality(selection, list)
+    if not selection then return false end
+    for _, q in ipairs(list) do
+      if q.name == selection then return true end
+    end
+    return false
+  end
+
+  if not is_valid_quality(options.quality_selection, options.qualities) then
+    options.quality_selection = "normal"
+  end
   render_quality_buttons(frame, options)
 
-  if options.inserters.names[1] then
+  if not is_valid_selection(options.inserter_selection, options.inserters.names) then
     options.inserter_selection = options.inserters.names[1]
-    local default_button = find_child_by_name(frame, GUI_INSERTER_PREFIX .. options.inserters.names[1])
-    if default_button then
-      default_button.toggled = true
+  end
+  -- Update inserter buttons state
+  local inserter_icons = find_child_by_name(frame, GUI_INSERTER_FLOW)
+  if inserter_icons then
+    for _, child in pairs(inserter_icons.children) do
+      if child and child.valid and child.name:find(GUI_INSERTER_PREFIX, 1, true) == 1 then
+        local inserter_name = child.name:sub(#GUI_INSERTER_PREFIX + 1)
+        child.toggled = (options.inserter_selection == inserter_name)
+      end
     end
   end
 end
@@ -1030,18 +1084,21 @@ local function refresh_recipe_dropdown(player, item_name)
     return
   end
 
-  local building_elem = find_child_by_name(frame, GUI_BUILDING)
-  local building_name = nil
-  if building_elem then
-    building_name = options.buildings.names[building_elem.selected_index]
-  end
-
+  local building_name = options.building_selection
   options.recipes = build_recipe_options(player.force, item_name, building_name)
 
   local recipe_elem = find_child_by_name(frame, GUI_RECIPE)
   if recipe_elem then
     recipe_elem.items = options.recipes.labels
-    recipe_elem.selected_index = 1
+    
+    -- Try to maintain the previous recipe index if it's still valid
+    local new_index = options.recipe_selection_index or 1
+    if new_index > #options.recipes.names then
+      new_index = 1
+    end
+    
+    recipe_elem.selected_index = new_index
+    options.recipe_selection_index = new_index
   end
 end
 
@@ -1064,6 +1121,10 @@ local function handle_create_click(player)
   local recipe_elem = find_child_by_name(frame, GUI_RECIPE)
 
   local item_name = item_elem and item_elem.elem_value
+  if options and item_name then
+    options.item_selection = item_name
+  end
+
   if not item_name then
     player.print("Quick Mall: choose an item first.")
     return
@@ -1289,6 +1350,15 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
   end
 
   if event.element and event.element.valid and event.element.name == GUI_ITEM then
+    local storage = get_storage_root()
+    local options = storage and storage.options[player.index]
+    
+    if options and options.is_initializing then
+      return
+    end
+    if options then
+      options.item_selection = event.element.elem_value
+    end
     refresh_building_dropdown(player, event.element.elem_value)
     refresh_recipe_dropdown(player, event.element.elem_value)
   end
@@ -1301,12 +1371,28 @@ script.on_event(defines.events.on_gui_selection_state_changed, function(event)
   end
 
   if event.element and event.element.valid and event.element.name == GUI_RECIPE then
+    local storage = get_storage_root()
+    local options = storage and storage.options[player.index]
+    if options then
+      options.recipe_selection_index = event.element.selected_index
+    end
     return
   end
 end)
 
 script.on_event(defines.events.on_gui_closed, function(event)
   if event.element and event.element.valid and event.element.name == GUI_ROOT then
+    local player = game.get_player(event.player_index)
+    if player then
+      local storage = get_storage_root()
+      local options = storage and storage.options[player.index]
+      if options then
+        local item_elem = find_child_by_name(event.element, GUI_ITEM)
+        if item_elem and item_elem.elem_value then
+          options.item_selection = item_elem.elem_value
+        end
+      end
+    end
     event.element.destroy()
   end
 end)
