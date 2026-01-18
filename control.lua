@@ -803,16 +803,20 @@ local function build_blueprint_entities(
     })
   end
 
-  add_entity({
-    name = output_chest,
-    position = { x = base_position.x - chest_offset, y = base_position.y + 1 },
-  })
+  if output_chest then
+    add_entity({
+      name = output_chest,
+      position = { x = base_position.x - chest_offset, y = base_position.y + 1 },
+    })
+  end
 
-  add_entity({
-    name = inserter_name,
-    position = { x = base_position.x - inserter_offset, y = base_position.y + 1 },
-    direction = defines.direction.east,
-  })
+  if output_chest and inserter_name then
+    add_entity({
+      name = inserter_name,
+      position = { x = base_position.x - inserter_offset, y = base_position.y + 1 },
+      direction = defines.direction.east,
+    })
+  end
 
   return entities
 end
@@ -1290,17 +1294,29 @@ local function handle_create_click(player)
 
   local request_list = get_item_requests(player, recipe, quality_name)
   local needs_input_chest = #request_list > 0
+  local needs_output_chest = has_solid_outputs(recipe)
+  local needs_inserter = needs_input_chest or needs_output_chest
 
-  if not (building_name and output_chest and inserter_name) or (needs_input_chest and not input_chest) then
+  if needs_output_chest == false then
+    output_chest = nil
+  end
+
+  if not building_name
+    or (needs_output_chest and not output_chest)
+    or (needs_inserter and not inserter_name)
+    or (needs_input_chest and not input_chest)
+  then
     player.print("Quick Mall: some selected entities are not available.")
     return
   end
 
-  local entities_to_validate = {
-    building_name,
-    output_chest,
-    inserter_name,
-  }
+  local entities_to_validate = { building_name }
+  if needs_output_chest then
+    table.insert(entities_to_validate, output_chest)
+  end
+  if needs_inserter then
+    table.insert(entities_to_validate, inserter_name)
+  end
   if needs_input_chest then
     table.insert(entities_to_validate, input_chest)
   end
