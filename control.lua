@@ -27,23 +27,39 @@ local STATIC_BUILDING_CANDIDATES = {
 }
 
 local INPUT_CHEST_CANDIDATES = {
+  { name = "wooden-chest", label = "Wooden Chest" },
+  { name = "iron-chest", label = "Iron Chest" },
+  { name = "steel-chest", label = "Steel Chest" },
+  {
+    name = "logistic-chest-buffer",
+    label = "Buffer Chest",
+    aliases = { "buffer-chest", "logistic-buffer-chest" },
+  },
   {
     name = "logistic-chest-requester",
     label = "Requester Chest",
     aliases = { "requester-chest", "logistic-requester-chest" },
   },
-  {
-    name = "logistic-chest-buffer",
-    label = "Buffer Chest",
-    aliases = { "buffer-chest", "logistic-buffer-chest" },
-  },
 }
 
 local OUTPUT_CHEST_CANDIDATES = {
+  { name = "wooden-chest", label = "Wooden Chest" },
+  { name = "iron-chest", label = "Iron Chest" },
+  { name = "steel-chest", label = "Steel Chest" },
   {
     name = "logistic-chest-passive-provider",
-    label = "Passive Provider",
+    label = "Passive Provider Chest",
     aliases = { "passive-provider-chest", "logistic-passive-provider-chest" },
+  },
+  {
+    name = "logistic-chest-active-provider",
+    label = "Active Provider Chest",
+    aliases = { "active-provider-chest", "logistic-active-provider-chest" },
+  },
+  {
+    name = "logistic-chest-storage",
+    label = "Storage Chest",
+    aliases = { "storage-chest", "logistic-storage-chest" },
   },
   {
     name = "logistic-chest-buffer",
@@ -51,9 +67,9 @@ local OUTPUT_CHEST_CANDIDATES = {
     aliases = { "buffer-chest", "logistic-buffer-chest" },
   },
   {
-    name = "logistic-chest-active-provider",
-    label = "Active Provider",
-    aliases = { "active-provider-chest", "logistic-active-provider-chest" },
+    name = "logistic-chest-requester",
+    label = "Requester Chest",
+    aliases = { "requester-chest", "logistic-requester-chest" },
   },
 }
 
@@ -767,104 +783,6 @@ local function give_blueprint_cursor(player, entities, request_list)
   return false
 end
 
-local function build_chest_options(force, is_input)
-  local prototypes = get_entity_prototypes()
-  local entries = {}
-  local found_names = {}
-
-  if prototypes then
-    for name, proto in pairs(prototypes) do
-      local is_valid = false
-      local type = proto.type
-      
-      if type == "logistic-container" then
-        local mode = proto.logistic_mode
-        if is_input then
-          if mode == "requester" or mode == "buffer" then
-            is_valid = true
-          end
-        else
-          is_valid = true
-        end
-      elseif not is_input and type == "container" then
-        is_valid = true
-      end
-
-      if is_valid then
-        local is_hidden = false
-        pcall(function()
-          if proto.has_flag("hidden") then
-            is_hidden = true
-          end
-        end)
-
-        local placeable = false
-        if proto.items_to_place_this and #proto.items_to_place_this > 0 then
-          placeable = true
-        end
-
-        if not is_hidden and placeable then
-          local lower_name = name:lower()
-          if lower_name:find("bottomless", 1, true) or 
-             lower_name:find("debug", 1, true) or 
-             lower_name:find("cheat", 1, true) or
-             lower_name:find("editor", 1, true) then
-            placeable = false
-          end
-        end
-
-        if not is_hidden and placeable then
-          local sort_weight = 100
-          if type == "logistic-container" then
-            local mode = proto.logistic_mode
-            if mode == "requester" then sort_weight = 10
-            elseif mode == "buffer" then sort_weight = 20
-            elseif mode == "passive-provider" then sort_weight = 30
-            elseif mode == "active-provider" then sort_weight = 40
-            elseif mode == "storage" then sort_weight = 50
-            end
-          elseif type == "container" then
-            if name:find("steel") then sort_weight = 60
-            elseif name:find("iron") then sort_weight = 70
-            elseif name:find("wood") then sort_weight = 80
-            else sort_weight = 90
-            end
-          end
-
-          table.insert(entries, {
-            name = name,
-            label = proto.localised_name or name,
-            order = proto.order or "z",
-            weight = sort_weight
-          })
-          found_names[name] = true
-        end
-      end
-    end
-  end
-
-  if #entries == 0 then
-    local candidates = is_input and INPUT_CHEST_CANDIDATES or OUTPUT_CHEST_CANDIDATES
-    return build_option_list(candidates)
-  end
-
-  table.sort(entries, function(a, b)
-    if a.weight ~= b.weight then
-      return a.weight > b.weight
-    end
-    return a.order > b.order
-  end)
-
-  local names = {}
-  local labels = {}
-  for _, entry in ipairs(entries) do
-    table.insert(names, entry.name)
-    table.insert(labels, entry.label)
-  end
-
-  return { names = names, labels = labels, uncertain = false }
-end
-
 local function is_valid_selection(selection, list)
   if not selection then return false end
   for _, name in ipairs(list) do
@@ -883,8 +801,8 @@ local function build_gui(player)
   local options = {
     buildings = build_building_options(player.force, existing_options and existing_options.item_selection, player.surface),
     recipes = { names = { nil }, labels = { "Unavailable" } },
-    input_chests = build_chest_options(player.force, true),
-    output_chests = build_chest_options(player.force, false),
+    input_chests = build_option_list(INPUT_CHEST_CANDIDATES),
+    output_chests = build_option_list(OUTPUT_CHEST_CANDIDATES),
     inserters = build_option_list(INSERTER_CANDIDATES),
     item_selection = existing_options and existing_options.item_selection,
     building_selection = existing_options and existing_options.building_selection,
