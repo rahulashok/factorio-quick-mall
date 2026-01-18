@@ -13,6 +13,8 @@ local GUI_INPUT_FLOW = "quick-mall-input-flow"
 local GUI_INPUT_PREFIX = "quick-mall-input-"
 local GUI_OUTPUT_FLOW = "quick-mall-output-flow"
 local GUI_OUTPUT_PREFIX = "quick-mall-output-"
+local GUI_QUALITY_FLOW = "quick-mall-quality-flow"
+local GUI_QUALITY_PREFIX = "quick-mall-quality-"
 local GUI_CREATE = "quick-mall-create"
 local GUI_CLOSE = "quick-mall-close"
 
@@ -329,6 +331,32 @@ local function find_recipe_for_item(force, item_name, building_prototype)
   return nil
 end
 
+local function render_quality_buttons(frame, options)
+  local quality_icons = frame and find_child_by_name(frame, GUI_QUALITY_FLOW)
+  if not quality_icons then
+    return
+  end
+
+  quality_icons.clear()
+
+  if #options.qualities <= 1 then
+    quality_icons.parent.visible = false
+    return
+  end
+  quality_icons.parent.visible = true
+
+  for _, quality in ipairs(options.qualities) do
+    local button = quality_icons.add({
+      type = "sprite-button",
+      name = GUI_QUALITY_PREFIX .. quality.name,
+      sprite = "quality/" .. quality.name,
+      style = "slot_button",
+      tooltip = quality.localised_name,
+    })
+    button.toggled = (options.quality_selection == quality.name)
+  end
+end
+
 local function build_building_options(force, item_name)
   local prototypes = get_entity_prototypes()
   local entries = {}
@@ -500,9 +528,10 @@ local function get_entity_tile_size(prototype)
   return math.ceil(width), math.ceil(height)
 end
 
-local function get_item_requests(player, recipe)
+local function get_item_requests(player, recipe, quality)
   local requests = {}
   local index = 1
+  local quality_name = quality or "normal"
   for _, ingredient in pairs(recipe.ingredients or {}) do
     local name = ingredient.name or ingredient[1]
     local ingredient_type = ingredient.type or "item"
@@ -511,7 +540,7 @@ local function get_item_requests(player, recipe)
       local stack_size = (prototype and prototype.stack_size) or 1
       -- Request 1 full stack of each input
       local count = stack_size
-      table.insert(requests, { index = index, name = name, count = count, quality = "normal", comparator = "=" })
+      table.insert(requests, { index = index, name = name, count = count, quality = quality_name, comparator = "=" })
       index = index + 1
     end
   end
@@ -559,10 +588,12 @@ local function build_blueprint_entities(
   inserter_name,
   chest_offset,
   inserter_offset,
-  request_list
+  request_list,
+  quality
 )
   local entities = {}
   local next_id = 1
+  local quality_name = quality or "normal"
 
   local request_filters = nil
   if request_list then
@@ -589,7 +620,11 @@ local function build_blueprint_entities(
     position = { x = base_position.x, y = base_position.y },
     direction = defines.direction.north,
     recipe = recipe_name,
-    tags = { quick_mall_recipe = recipe_name },
+    recipe_quality = quality_name,
+    tags = { 
+      quick_mall_recipe = recipe_name,
+      quick_mall_recipe_quality = quality_name
+    },
   })
 
   add_entity({
@@ -677,6 +712,33 @@ local function give_blueprint_cursor(player, entities, request_list)
   end
 
   return false
+end
+
+local function get_quality_options()
+  local qualities = {}
+  
+  -- Factorio 2.0+
+  if prototypes and prototypes.quality then
+    local sorted = {}
+    for name, proto in pairs(prototypes.quality) do
+      table.insert(sorted, proto)
+    end
+    table.sort(sorted, function(a, b)
+      return (a.level or 0) < (b.level or 0)
+    end)
+    for _, proto in ipairs(sorted) do
+      if not proto.hidden then
+        table.insert(qualities, { name = proto.name, localised_name = proto.localised_name })
+      end
+    end
+  end
+
+  -- Fallback for 1.1 or if no qualities found (just normal)
+  if #qualities == 0 then
+    table.insert(qualities, { name = "normal", localised_name = "Normal" })
+  end
+
+  return qualities
 end
 
 local function build_chest_options(force, is_input)
@@ -787,8 +849,10 @@ local function build_gui(player)
     input_chests = build_chest_options(player.force, true),
     output_chests = build_chest_options(player.force, false),
     inserters = build_option_list(INSERTER_CANDIDATES),
+    qualities = get_quality_options(),
     building_selection = nil,
     inserter_selection = nil,
+    quality_selection = "normal",
     prototype_resolution_uncertain = false,
   }
   options.prototype_resolution_uncertain = options.input_chests.uncertain
@@ -833,6 +897,15 @@ local function build_gui(player)
     elem_type = "item",
     tooltip = "Choose the item to craft.",
   })
+
+  local quality_flow = content.add({ type = "flow", direction = "horizontal" })
+  quality_flow.add({ type = "label", caption = "Item Quality: " })
+  local quality_icons = quality_flow.add({
+    type = "flow",
+    name = GUI_QUALITY_FLOW,
+    direction = "horizontal",
+  })
+  quality_icons.style.horizontal_spacing = 4
 
   local building_flow = content.add({ type = "flow", direction = "horizontal" })
   building_flow.add({ type = "label", caption = "Building: " })
@@ -914,6 +987,8 @@ local function build_gui(player)
     options.output_chest_selection = options.output_chests.names[1]
   end
   render_output_chest_buttons(frame, options)
+
+  render_quality_buttons(frame, options)
 
   if options.inserters.names[1] then
     options.inserter_selection = options.inserters.names[1]
@@ -999,6 +1074,7 @@ local function handle_create_click(player)
   local input_chest = options.input_chest_selection
   local output_chest = options.output_chest_selection
   local inserter_name = options.inserter_selection
+  local quality_name = options.quality_selection
 
   if not (building_name and input_chest and output_chest and inserter_name) then
     player.print("Quick Mall: some selected entities are not available.")
@@ -1042,7 +1118,7 @@ local function handle_create_click(player)
   local inserter_offset = half_width + 1
   local chest_offset = half_width + 2
 
-  local request_list = get_item_requests(player, recipe)
+  local request_list = get_item_requests(player, recipe, quality_name)
   local entities = build_blueprint_entities(
     { x = 0, y = 0 },
     building_name,
@@ -1052,7 +1128,8 @@ local function handle_create_click(player)
     inserter_name,
     chest_offset,
     inserter_offset,
-    request_list
+    request_list,
+    quality_name
   )
   if not give_blueprint_cursor(player, entities, request_list) then
     player.print("Quick Mall: unable to create blueprint. Clear your cursor and try again.")
@@ -1069,7 +1146,8 @@ local function apply_ghost_tags(entity, tags)
   end
 
   if tags.quick_mall_recipe and entity.set_recipe then
-    entity.set_recipe(tags.quick_mall_recipe)
+    local quality = tags.quick_mall_recipe_quality or "normal"
+    entity.set_recipe(tags.quick_mall_recipe, quality)
   end
 
   if tags.quick_mall_requests then
@@ -1169,6 +1247,18 @@ script.on_event(defines.events.on_gui_click, function(event)
 
       local frame = player.gui.screen[GUI_ROOT]
       render_output_chest_buttons(frame, options)
+    elseif event.element.name:find(GUI_QUALITY_PREFIX, 1, true) == 1 then
+      local storage = get_storage_root()
+      local options = storage and storage.options[player.index]
+      if not options then
+        return
+      end
+
+      local quality_name = event.element.name:sub(#GUI_QUALITY_PREFIX + 1)
+      options.quality_selection = quality_name
+
+      local frame = player.gui.screen[GUI_ROOT]
+      render_quality_buttons(frame, options)
     elseif event.element.name:find(GUI_INSERTER_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]

@@ -9,6 +9,7 @@ near your character.
 - The input chest requests 1 full stack of each ingredient.
 - The assembler ghost stores the chosen recipe and applies it when built.
 - The output chest is placed as the selected provider type.
+- Supports quality selection for the target item's ingredients (requires Space Age or a quality mod).
 
 ## Controls
 - `Ctrl+M`: Open Quick Mall
