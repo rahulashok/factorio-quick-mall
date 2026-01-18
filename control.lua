@@ -311,9 +311,16 @@ local function update_quality_warning(player, frame, options)
   local recipe_name = options.recipes.names[options.recipe_selection_index]
   local recipe = recipe_name and player.force.recipes[recipe_name]
   
-  if recipe and not has_solid_inputs(recipe) then
-    warning_label.visible = true
-    warning_label.caption = "Note: Recipes with only fluid inputs cannot produce higher than normal quality. Output will be normal quality."
+  if recipe then
+    if not has_solid_inputs(recipe) then
+      warning_label.visible = true
+      warning_label.caption = "Note: Recipes with only fluid inputs cannot produce higher than normal quality. Output will be normal quality."
+    elseif not has_solid_outputs(recipe) then
+      warning_label.visible = true
+      warning_label.caption = "Note: Fluids do not possess quality. Output fluid will be normal quality."
+    else
+      warning_label.visible = false
+    end
   else
     warning_label.visible = false
   end
@@ -1331,7 +1338,12 @@ local function handle_create_click(player)
   end
 
   if quality_name ~= "normal" and not has_solid_inputs(recipe) then
-    player.print("Quick Mall: Recipes with only fluid inputs cannot produce higher than normal quality. Output quality has been reset to normal.")
+    -- Quick Mall: Recipes with only fluid inputs cannot produce higher than normal quality. Output quality has been reset to normal.
+    quality_name = "normal"
+  end
+
+  if quality_name ~= "normal" and not has_solid_outputs(recipe) then
+    -- Quick Mall: Fluids do not possess quality. Output quality has been reset to normal.
     quality_name = "normal"
   end
 
