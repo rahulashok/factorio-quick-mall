@@ -66,32 +66,36 @@ local INSERTER_CANDIDATES = {
 }
 
 local function get_entity_prototypes()
-  local ok, prototypes = pcall(function()
+  -- Factorio 1.1/2.0 Standard API
+  local ok, res = pcall(function()
     return game.entity_prototypes
   end)
-  if ok and prototypes then
-    return prototypes
+  if ok and res then
+    return res
   end
 
-  ok, prototypes = pcall(function()
+  -- Fallback to Factorio 2.0+ global if available
+  if prototypes and prototypes.entity then
+    return prototypes.entity
+  end
+
+  ok, res = pcall(function()
     if game.get_filtered_entity_prototypes then
       return game.get_filtered_entity_prototypes({})
     end
     return nil
   end)
-  if ok and prototypes then
-    return prototypes
-  end
-
-  local proto_root = rawget(_G, "prototypes")
-  if proto_root and proto_root.entity then
-    return proto_root.entity
+  if ok and res then
+    return res
   end
 
   return {}
 end
 
 local function resolve_entity_prototype(entity_name)
+  if not entity_name then return nil end
+
+  -- Factorio 1.1/2.0 Standard API
   local ok, proto = pcall(function()
     if game.get_entity_prototype then
       return game.get_entity_prototype(entity_name)
@@ -102,38 +106,40 @@ local function resolve_entity_prototype(entity_name)
     return proto
   end
 
-  local prototypes = get_entity_prototypes()
-  if type(prototypes) == "table" then
-    return prototypes[entity_name]
+  -- Fallback to Factorio 2.0+ global if available
+  if prototypes and prototypes.entity then
+    return prototypes.entity[entity_name]
   end
 
-  ok, proto = pcall(function()
-    return prototypes and prototypes[entity_name] or nil
-  end)
-  if ok then
-    return proto
+  local prototypes_list = get_entity_prototypes()
+  if prototypes_list then
+    return prototypes_list[entity_name]
   end
 
   return nil
 end
 
 local function get_item_prototypes()
-  local ok, prototypes = pcall(function()
+  -- Factorio 1.1/2.0 Standard API
+  local ok, res = pcall(function()
     return game.item_prototypes
   end)
-  if ok and prototypes then
-    return prototypes
+  if ok and res then
+    return res
   end
 
-  local proto_root = rawget(_G, "prototypes")
-  if proto_root and proto_root.item then
-    return proto_root.item
+  -- Fallback to Factorio 2.0+ global if available
+  if prototypes and prototypes.item then
+    return prototypes.item
   end
 
   return {}
 end
 
 local function resolve_item_prototype(item_name)
+  if not item_name then return nil end
+
+  -- Factorio 1.1/2.0 Standard API
   local ok, proto = pcall(function()
     if game.get_item_prototype then
       return game.get_item_prototype(item_name)
@@ -144,17 +150,16 @@ local function resolve_item_prototype(item_name)
     return proto
   end
 
-  local prototypes = get_item_prototypes()
-  if type(prototypes) == "table" then
-    return prototypes[item_name]
+  -- Fallback to Factorio 2.0+ global if available
+  if prototypes and prototypes.item then
+    return prototypes.item[item_name]
   end
 
-  ok, proto = pcall(function()
-    return prototypes and prototypes[item_name] or nil
-  end)
-  if ok then
-    return proto
+  local prototypes_list = get_item_prototypes()
+  if prototypes_list then
+    return prototypes_list[item_name]
   end
+
   return nil
 end
 
@@ -328,22 +333,45 @@ local function build_building_options(force, item_name)
   local names = {}
   local labels = {}
   local prototypes = get_entity_prototypes()
+  local found_names = {}
 
-  if type(prototypes) == "table" and next(prototypes) ~= nil then
+  if prototypes then
     for name, prototype in pairs(prototypes) do
-      local placeable = prototype.items_to_place_this and #prototype.items_to_place_this > 0
-      if placeable and prototype.crafting_categories and next(prototype.crafting_categories) then
+      local is_valid = false
+      pcall(function()
+        local placeable = prototype.items_to_place_this and #prototype.items_to_place_this > 0
+        local has_categories = prototype.crafting_categories and next(prototype.crafting_categories) ~= nil
+        
+        local is_hidden = false
+        pcall(function()
+          if prototype.has_flag("hidden") then
+            is_hidden = true
+          end
+        end)
+        
+        if placeable and has_categories and not is_hidden then
+          is_valid = true
+        end
+      end)
+
+      if is_valid then
         if not item_name or find_recipe_for_item(force, item_name, prototype) then
           table.insert(names, name)
+          found_names[name] = true
         end
       end
     end
-  else
+  end
+
+  if #names == 0 then
     for _, option in ipairs(STATIC_BUILDING_CANDIDATES) do
-      local prototype = resolve_entity_prototype(option.name)
-      if prototype and prototype.crafting_categories and next(prototype.crafting_categories) then
-        if not item_name or find_recipe_for_item(force, item_name, prototype) then
-          table.insert(names, option.name)
+      if not found_names[option.name] then
+        local prototype = resolve_entity_prototype(option.name)
+        if prototype then
+          if not item_name or find_recipe_for_item(force, item_name, prototype) then
+            table.insert(names, option.name)
+            found_names[option.name] = true
+          end
         end
       end
     end
@@ -638,6 +666,73 @@ local function give_blueprint_cursor(player, entities, request_list)
   return false
 end
 
+local function build_chest_options(force, is_input)
+  local names = {}
+  local labels = {}
+  local prototypes = get_entity_prototypes()
+  local found_names = {}
+
+  if prototypes then
+    local all_names = {}
+    for name, _ in pairs(prototypes) do
+      table.insert(all_names, name)
+    end
+    table.sort(all_names)
+
+    for _, name in ipairs(all_names) do
+      local proto = prototypes[name]
+      if proto then
+        local is_valid = false
+        local type = proto.type
+        
+        if type == "logistic-container" then
+          local mode = proto.logistic_mode
+          if is_input then
+            -- Input: Requester, Buffer
+            if mode == "requester" or mode == "buffer" then
+              is_valid = true
+            end
+          else
+            -- Output: Any logistic chest
+            is_valid = true
+          end
+        elseif not is_input and type == "container" then
+          -- Output: Any regular container
+          is_valid = true
+        end
+
+        if is_valid then
+          -- Filter out hidden ones and those that aren't place-able by the player
+          local is_hidden = false
+          pcall(function()
+            if proto.has_flag("hidden") then
+              is_hidden = true
+            end
+          end)
+
+          local placeable = false
+          if proto.items_to_place_this and #proto.items_to_place_this > 0 then
+            placeable = true
+          end
+
+          if not is_hidden and placeable then
+            table.insert(names, name)
+            table.insert(labels, proto.localised_name or name)
+            found_names[name] = true
+          end
+        end
+      end
+    end
+  end
+
+  if #names == 0 then
+    local candidates = is_input and INPUT_CHEST_CANDIDATES or OUTPUT_CHEST_CANDIDATES
+    return build_option_list(candidates)
+  end
+
+  return { names = names, labels = labels, uncertain = false }
+end
+
 local function build_gui(player)
   ensure_global()
   destroy_gui(player)
@@ -645,8 +740,8 @@ local function build_gui(player)
   local options = {
     buildings = build_building_options(player.force, nil),
     recipes = { names = { nil }, labels = { "Unavailable" } },
-    input_chests = build_option_list(INPUT_CHEST_CANDIDATES),
-    output_chests = build_option_list(OUTPUT_CHEST_CANDIDATES),
+    input_chests = build_chest_options(player.force, true),
+    output_chests = build_chest_options(player.force, false),
     inserters = build_option_list(INSERTER_CANDIDATES),
     building_selection = nil,
     inserter_selection = nil,
