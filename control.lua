@@ -813,12 +813,84 @@ local function get_researched_item_filters(force)
   return filters
 end
 
+local function check_and_clear_incompatible_cursor_recipe(player)
+  local stack = player.cursor_stack
+  if not (stack and stack.valid and stack.valid_for_read and stack.is_blueprint) then
+    return
+  end
+
+  local entities = stack.get_blueprint_entities()
+  if not entities then return end
+
+  local changed = false
+  for _, entity in ipairs(entities) do
+    -- Only clear if it's one of OUR recipes (building has the quick_mall_recipe tag)
+    if entity.recipe and entity.tags and entity.tags.quick_mall_recipe then
+      local recipe = player.force.recipes[entity.recipe]
+      if recipe and not is_recipe_compatible_with_surface(recipe, player.surface) then
+        entity.recipe = nil
+        entity.recipe_quality = nil
+        -- Also clear tags to be consistent
+        entity.tags.quick_mall_recipe = nil
+        entity.tags.quick_mall_recipe_quality = nil
+        changed = true
+        
+        -- If we found an incompatible building, also clear any requester filters in this layout
+        for _, other_e in ipairs(entities) do
+          if other_e.request_filters or other_e.logistic_sections then
+            other_e.request_filters = nil
+            other_e.logistic_sections = nil
+          end
+        end
+      end
+    end
+  end
+
+  if changed then
+    stack.set_blueprint_entities(entities)
+    player.print("Quick Mall: cleared surface-incompatible recipe from blueprint.")
+  end
+end
+
 local function is_valid_selection(selection, list)
   if not selection then return false end
   for _, name in ipairs(list) do
     if name == selection then return true end
   end
   return false
+end
+
+local function check_and_clear_incompatible_cursor_recipe(player)
+  local stack = player.cursor_stack
+  if not (stack and stack.valid and stack.valid_for_read and stack.is_blueprint) then
+    return
+  end
+
+  local entities = stack.get_blueprint_entities()
+  if not entities then return end
+
+  local changed = false
+  for _, entity in ipairs(entities) do
+    -- Only clear if it's one of OUR recipes (building or input chest with requests)
+    if entity.recipe and entity.tags and (entity.tags.quick_mall_recipe or entity.tags.quick_mall_requests) then
+      local recipe = player.force.recipes[entity.recipe]
+      if recipe and not is_recipe_compatible_with_surface(recipe, player.surface) then
+        entity.recipe = nil
+        entity.recipe_quality = nil
+        -- Also clear tags to be consistent
+        if entity.tags.quick_mall_recipe then
+          entity.tags.quick_mall_recipe = nil
+          entity.tags.quick_mall_recipe_quality = nil
+        end
+        changed = true
+      end
+    end
+  end
+
+  if changed then
+    stack.set_blueprint_entities(entities)
+    player.print("Quick Mall: cleared surface-incompatible recipe from blueprint.")
+  end
 end
 
 local function build_gui(player)
@@ -1370,6 +1442,10 @@ script.on_event(defines.events.on_player_changed_surface, function(event)
     return
   end
 
+  -- 1. Check if player is holding an incompatible mall layout in their cursor
+  check_and_clear_incompatible_cursor_recipe(player)
+
+  -- 2. Refresh GUI if open
   local frame = player.gui.screen[GUI_ROOT]
   if not frame then
     return
