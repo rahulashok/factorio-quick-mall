@@ -1525,7 +1525,7 @@ script.on_event(defines.events.on_gui_click, function(event)
       options.input_chest_selection = chest_name
 
       local frame = player.gui.screen[GUI_ROOT]
-      render_input_chest_buttons(frame, options)
+      render_input_chest_buttons(frame, options, player.force)
     elseif event.element.name:find(GUI_OUTPUT_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]
@@ -1537,7 +1537,7 @@ script.on_event(defines.events.on_gui_click, function(event)
       options.output_chest_selection = chest_name
 
       local frame = player.gui.screen[GUI_ROOT]
-      render_output_chest_buttons(frame, options)
+      render_output_chest_buttons(frame, options, player.force)
     elseif event.element.name:find(GUI_INSERTER_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]
