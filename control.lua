@@ -19,6 +19,8 @@ local GUI_QUALITY_WARNING = "quick-mall-quality-warning"
 local GUI_CREATE = "quick-mall-create"
 local GUI_CLOSE = "quick-mall-close"
 
+local tests = require("tests")
+
 local STATIC_BUILDING_CANDIDATES = {
   { name = "assembling-machine-1", label = "Assembler 1" },
   { name = "assembling-machine-2", label = "Assembler 2" },
@@ -1713,3 +1715,14 @@ end
 
 script.on_event(defines.events.on_built_entity, handle_built_entity)
 script.on_event(defines.events.on_robot_built_entity, handle_built_entity)
+
+-- Remote interface for testing
+remote.add_interface("quick_mall", {
+  run_tests = function()
+    if tests then
+      tests.run_all()
+    else
+      game.print("Quick Mall: tests module not loaded.")
+    end
+  end
+})
