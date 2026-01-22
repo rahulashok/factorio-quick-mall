@@ -4,6 +4,7 @@ local GUI_RECIPE_FLOW = "quick-mall-recipe-flow"
 local GUI_RECIPE_PREFIX = "quick-mall-recipe-"
 local GUI_INPUT_CHEST = "quick-mall-input-chest"
 local GUI_OUTPUT_CHEST = "quick-mall-output-chest"
+local GUI_STACK_LIMIT = "quick-mall-stack-limit"
 local GUI_INSERTER = "quick-mall-inserter"
 local GUI_BUILDING_FLOW = "quick-mall-building-flow"
 local GUI_BUILDING_PREFIX = "quick-mall-building-"
@@ -769,11 +770,13 @@ local function build_blueprint_entities(
   chest_offset,
   inserter_offset,
   request_list,
-  quality
+  quality,
+  stack_limit
 )
   local entities = {}
   local next_id = 1
   local quality_name = quality or "normal"
+  local bar_value = (stack_limit and stack_limit > 0) and (stack_limit + 1) or nil
 
   local request_filters = nil
   if request_list then
@@ -832,6 +835,7 @@ local function build_blueprint_entities(
     add_entity({
       name = output_chest,
       position = { x = base_position.x - chest_offset, y = base_position.y + 1 },
+      bar = bar_value,
     })
   end
 
@@ -1036,6 +1040,7 @@ local function build_gui(player)
     recipe_selection_index = existing_options and existing_options.recipe_selection_index or 1,
     input_chest_selection = existing_options and existing_options.input_chest_selection,
     output_chest_selection = existing_options and existing_options.output_chest_selection,
+    stack_limit = existing_options and existing_options.stack_limit or 1,
     inserter_selection = existing_options and existing_options.inserter_selection,
     prototype_resolution_uncertain = false,
     is_initializing = true,
@@ -1145,6 +1150,17 @@ local function build_gui(player)
     direction = "horizontal",
   })
   output_icons.style.horizontal_spacing = 4
+
+  output_flow.add({ type = "label", caption = "Output Stacks Limit: ", style = "heading_2_label" })
+  local stack_limit = output_flow.add({
+    type = "textfield",
+    name = GUI_STACK_LIMIT,
+    text = tostring(options.stack_limit or 1),
+    numeric = true,
+    allow_decimal = false,
+    allow_negative = false,
+  })
+  stack_limit.style.width = 50
 
   local inserter_flow = content.add({ type = "flow", direction = "horizontal" })
   inserter_flow.style.vertical_align = "center"
@@ -1395,7 +1411,8 @@ local function handle_create_click(player)
     chest_offset,
     inserter_offset,
     request_list,
-    quality_name
+    quality_name,
+    options.stack_limit
   )
   if not give_blueprint_cursor(player, entities, request_list) then
     player.print("Quick Mall: unable to create blueprint. Clear your cursor and try again.")
@@ -1556,6 +1573,24 @@ script.on_event(defines.events.on_gui_click, function(event)
             child.toggled = (child.name == event.element.name)
           end
         end
+      end
+    end
+  end
+end)
+
+script.on_event(defines.events.on_gui_text_changed, function(event)
+  local player = game.get_player(event.player_index)
+  if not player then
+    return
+  end
+
+  if event.element and event.element.valid and event.element.name == GUI_STACK_LIMIT then
+    local storage = get_storage_root()
+    local options = storage and storage.options[player.index]
+    if options then
+      local val = tonumber(event.element.text)
+      if val and val > 0 then
+        options.stack_limit = val
       end
     end
   end
