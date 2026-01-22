@@ -5,6 +5,7 @@ local GUI_RECIPE_PREFIX = "quick-mall-recipe-"
 local GUI_INPUT_CHEST = "quick-mall-input-chest"
 local GUI_OUTPUT_CHEST = "quick-mall-output-chest"
 local GUI_STACK_LIMIT = "quick-mall-stack-limit"
+local GUI_STACK_LIMIT_FLOW = "quick-mall-stack-limit-flow"
 local GUI_INSERTER = "quick-mall-inserter"
 local GUI_BUILDING_FLOW = "quick-mall-building-flow"
 local GUI_BUILDING_PREFIX = "quick-mall-building-"
@@ -397,6 +398,32 @@ local function render_output_chest_buttons(frame, options, force)
     })
     button.toggled = (options.output_chest_selection == chest_name)
   end
+end
+
+local function render_stack_limit_ui(frame, options, force)
+  local flow = frame and find_child_by_name(frame, GUI_STACK_LIMIT_FLOW)
+  if not flow then return end
+
+  flow.clear()
+
+  local recipe_name = options.recipes.names[options.recipe_selection_index]
+  local recipe = recipe_name and force.recipes[recipe_name]
+  
+  flow.add({ type = "label", caption = "Output Stacks Limit: ", style = "heading_2_label" })
+  if recipe and not has_solid_outputs(recipe) then
+    flow.add({ type = "label", caption = "No solid output items" })
+    return
+  end
+
+  local stack_limit = flow.add({
+    type = "textfield",
+    name = GUI_STACK_LIMIT,
+    text = tostring(options.stack_limit or 1),
+    numeric = true,
+    allow_decimal = false,
+    allow_negative = false,
+  })
+  stack_limit.style.width = 50
 end
 
 local function is_recipe_compatible_with_surface(recipe, surface)
@@ -1151,18 +1178,12 @@ local function build_gui(player)
   })
   output_icons.style.horizontal_spacing = 4
 
-  local stack_limit_flow = content.add({ type = "flow", direction = "horizontal" })
-  stack_limit_flow.style.vertical_align = "center"
-  stack_limit_flow.add({ type = "label", caption = "Output Stacks Limit: ", style = "heading_2_label" })
-  local stack_limit = stack_limit_flow.add({
-    type = "textfield",
-    name = GUI_STACK_LIMIT,
-    text = tostring(options.stack_limit or 1),
-    numeric = true,
-    allow_decimal = false,
-    allow_negative = false,
+  local stack_limit_flow = content.add({ 
+    type = "flow", 
+    name = GUI_STACK_LIMIT_FLOW,
+    direction = "horizontal" 
   })
-  stack_limit.style.width = 50
+  stack_limit_flow.style.vertical_align = "center"
 
   local inserter_flow = content.add({ type = "flow", direction = "horizontal" })
   inserter_flow.style.vertical_align = "center"
@@ -1217,6 +1238,7 @@ local function build_gui(player)
     options.output_chest_selection = options.output_chests.names[1]
   end
   render_output_chest_buttons(frame, options, player.force)
+  render_stack_limit_ui(frame, options, player.force)
 
   if not is_valid_selection(options.inserter_selection, options.inserters.names) then
     options.inserter_selection = options.inserters.names[1]
@@ -1292,6 +1314,7 @@ local function refresh_recipe_buttons(player, item_name)
   render_recipe_buttons(frame, options)
   render_input_chest_buttons(frame, options, player.force)
   render_output_chest_buttons(frame, options, player.force)
+  render_stack_limit_ui(frame, options, player.force)
 end
 
 local function handle_create_click(player)
@@ -1533,6 +1556,7 @@ script.on_event(defines.events.on_gui_click, function(event)
       render_recipe_buttons(frame, options)
       render_input_chest_buttons(frame, options, player.force)
       render_output_chest_buttons(frame, options, player.force)
+      render_stack_limit_ui(frame, options, player.force)
     elseif event.element.name:find(GUI_INPUT_PREFIX, 1, true) == 1 then
       local storage = get_storage_root()
       local options = storage and storage.options[player.index]
