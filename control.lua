@@ -776,7 +776,7 @@ local function build_blueprint_entities(
   local entities = {}
   local next_id = 1
   local quality_name = quality or "normal"
-  local bar_value = (stack_limit and stack_limit > 0) and (stack_limit + 1) or nil
+  local bar_value = (stack_limit and stack_limit > 0) and stack_limit or nil
 
   local request_filters = nil
   if request_list then
@@ -1151,8 +1151,10 @@ local function build_gui(player)
   })
   output_icons.style.horizontal_spacing = 4
 
-  output_flow.add({ type = "label", caption = "Output Stacks Limit: ", style = "heading_2_label" })
-  local stack_limit = output_flow.add({
+  local stack_limit_flow = content.add({ type = "flow", direction = "horizontal" })
+  stack_limit_flow.style.vertical_align = "center"
+  stack_limit_flow.add({ type = "label", caption = "Output Stacks Limit: ", style = "heading_2_label" })
+  local stack_limit = stack_limit_flow.add({
     type = "textfield",
     name = GUI_STACK_LIMIT,
     text = tostring(options.stack_limit or 1),
