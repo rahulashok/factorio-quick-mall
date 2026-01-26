@@ -1,0 +1,68 @@
+---------------------------------------------------------------------------------------------------
+Version: 1.1.0
+Date: 2026-01-25
+  Changes:
+    - Added changelog file
+  Minor Features:
+    - Added English locale file for proper UI translations
+---------------------------------------------------------------------------------------------------
+Version: 1.0.0
+Date: 2026-01-22
+  Major Features:
+    - Remote interface for testing functionality
+    - Output stacks limit control in GUI
+  Changes:
+    - Improved stack limit UI with horizontal flow layout
+    - Enhanced error handling for missing tests module
+---------------------------------------------------------------------------------------------------
+Version: 0.1.1
+Date: Unknown
+  Bugfixes:
+    - Fixed GUI button rendering to include player force for input/output chests
+    - Fixed quality warning logic for fluid-only recipes
+  Changes:
+    - Improved README documentation
+    - Added mod thumbnail
+    - Enhanced GUI layout with better label centering and styles
+---------------------------------------------------------------------------------------------------
+Version: 0.1.0
+Date: Unknown
+  Major Features:
+    - Initial release for Factorio 2.0
+    - Quick Mall GUI for creating production blueprints
+    - Support for assemblers, chemical plants, foundries, EM plants, and oil refineries
+    - Dynamic building and chest discovery
+    - Space Age quality support for items
+    - Surface compatibility filtering (planet-specific recipes)
+    - Fluid crafting support with quality warnings
+    - Remembers last selected options
+  Features:
+    - Item picker filtered by researched recipes
+    - Recipe selection with visual icons
+    - Building type selection
+    - Input/output chest type selection (including logistic chests)
+    - Inserter type selection
+    - Quality selection for crafted items
+    - Automatic input chest request configuration
+    - Blueprint placement with temporary cursor
+  Quality Features:
+    - Quality warnings for fluid-only input recipes
+    - Quality warnings for fluid outputs
+    - Proper quality handling for items vs fluids
+  Surface Compatibility:
+    - Filters buildings by surface properties
+    - Filters recipes by surface compatibility
+    - Auto-clears incompatible recipes when changing surfaces
+    - GUI refreshes when player changes surface
+  GUI:
+    - Icon-based selection for buildings, recipes, chests, and inserters
+    - Visual feedback with toggled buttons
+    - Localized entity names in tooltips
+    - Clear messages for unavailable options
+  Keyboard Shortcut:
+    - Control + Q to open Quick Mall GUI
+  Technical:
+    - Compatible with Factorio 1.1 and 2.0 APIs
+    - Fallback prototype resolution for API changes
+    - Optimized recipe filtering and building discovery
+    - Proper handling of entity placement and validation
