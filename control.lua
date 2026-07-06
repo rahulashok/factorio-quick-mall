@@ -714,13 +714,15 @@ local function build_recipe_options(force, item_name, building_name, surface)
     return { names = { nil }, labels = { "No options found for this surface" } }
   end
 
+  -- OPTIMIZATION: reuse get_recipes_for_item (enabled + surface-compatible +
+  -- outputs item) instead of re-scanning force.recipes from scratch. The set
+  -- build_recipe_options needs is exactly that result further filtered by the
+  -- building's crafting categories, so we only apply recipe_usable_in_building
+  -- here. This removes one full force.recipes walk per GUI build/refresh.
   local names = {}
-  for recipe_name, recipe in pairs(force.recipes) do
-    if recipe_outputs_item(recipe, name_to_check) and recipe_usable_in_building(recipe, building_prototype) then
-      local compatible = is_recipe_compatible_with_surface(recipe, surface)
-      if compatible then
-        table.insert(names, recipe_name)
-      end
+  for _, recipe in ipairs(get_recipes_for_item(force, name_to_check, surface)) do
+    if recipe_usable_in_building(recipe, building_prototype) then
+      table.insert(names, recipe.name)
     end
   end
 
