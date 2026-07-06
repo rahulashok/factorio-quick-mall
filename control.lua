@@ -1344,9 +1344,11 @@ local function handle_create_click(player)
 
   local item_name = item_value
   local quality_name = "normal"
+  local is_fluid = false
   if type(item_value) == "table" then
     item_name = item_value.name
     quality_name = item_value.quality or "normal"
+    is_fluid = item_value.type == "fluid"
   end
 
   local building_name = options.building_selection

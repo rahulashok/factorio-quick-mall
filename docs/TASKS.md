@@ -11,7 +11,7 @@ _Last updated: 2026-07-06_
 
 | # | Item | Type | Severity | Status |
 |---|------|------|----------|--------|
-| 1 | `is_fluid` undefined in `handle_create_click` | Bug | High | 🔴 Todo |
+| 1 | `is_fluid` undefined in `handle_create_click` | Bug | High | 🟢 Done |
 | 2 | Inserter directions appear swapped | Bug | High | 🔵 Needs In-Game Verification |
 | 3 | Duplicate function definitions shadow correct version | Bug | Medium | 🔴 Todo |
 | 4 | Dead `quick_mall_requests` tag-application path | Bug (dead code) | Low | 🔴 Todo |
@@ -26,7 +26,7 @@ _Last updated: 2026-07-06_
 ## Bugs
 
 ### 1. `is_fluid` is an undefined variable in `handle_create_click`
-- **Status:** 🔴 Todo
+- **Status:** 🟢 Done
 - **Location:** `control.lua:1386`
 - **Problem:** `if is_fluid and quality_name ~= "normal"` references a variable that is never declared in this function — it is always `nil`, so the "fluids can't have quality → reset to normal" guard never runs. The GUI warning path computes `is_fluid` correctly, but the create path does not.
 - **Fix:** Derive it locally, e.g. `local is_fluid = (type(item_value) == "table" and item_value.type == "fluid")`.
