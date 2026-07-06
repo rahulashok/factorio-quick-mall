@@ -12,7 +12,7 @@ _Last updated: 2026-07-06_
 | #   | Item                                                                                                                  | Type            | Severity | Status                        |
 | --- | --------------------------------------------------------------------------------------------------------------------- | --------------- | -------- | ----------------------------- |
 | 1   | `is_fluid` undefined in `handle_create_click`                                                                         | Bug             | High     | 🟢 Done                       |
-| 2   | Inserter directions appear swapped                                                                                    | Bug             | High     | 🔵 Needs In-Game Verification |
+| 2   | Inserter directions appear swapped                                                                                    | Not a bug       | —        | ⚪ Won't Do (verified correct) |
 | 3   | Duplicate function definitions shadow correct version                                                                 | Bug             | Medium   | 🟢 Done                       |
 | 4   | Dead `quick_mall_requests` tag-application path                                                                       | Bug (dead code) | Low      | 🟢 Done                       |
 | 5   | `build_building_options` re-scans all prototypes per item change                                                      | Optimization    | Medium   | 🟢 Done                       |
@@ -33,10 +33,10 @@ _Last updated: 2026-07-06_
 - **Fix:** Derive it locally, e.g. `local is_fluid = (type(item_value) == "table" and item_value.type == "fluid")`.
 
 ### 2. Inserter directions appear swapped
-- **Status:** 🔵 Needs In-Game Verification
-- **Location:** `control.lua:856-877`
-- **Problem:** Chests are placed west of the building. An inserter's `direction` is its **drop** direction. Input inserter (should grab from west chest, drop east into building) is set to `west`; output inserter (should grab from building, drop west into chest) is set to `east`. Both look reversed, which would push items the wrong way.
-- **Fix:** Likely swap to input=`east`, output=`west` — **confirm in-game before changing.**
+- **Status:** ⚪ Won't Do — **verified correct in-game (2026-07-06).** Do not "fix" this.
+- **Location:** `control.lua` (input inserter `direction.west`, output inserter `direction.east` in `build_blueprint_entities`)
+- **Original concern:** Under the Factorio 1.1 convention (inserter `direction` = the side it *drops* on), with chests placed west of the building the directions looked reversed.
+- **Resolution:** In Factorio **2.0** the inserter direction convention is inverted vs 1.1 — a 2.0 inserter's `direction` points toward its **pickup** side, not its drop side. The current values are therefore correct: the input inserter (dir `west`) picks up from the west chest and drops east into the building; the output inserter (dir `east`) picks up from the building and drops west into the chest. Confirmed working in-game by the author. **No change made.**
 
 ### 3. Duplicate function definitions shadow the correct version
 - **Status:** 🟢 Done
