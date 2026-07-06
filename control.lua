@@ -1,3 +1,52 @@
+-- =============================================================================
+-- Quick Mall — control.lua
+-- =============================================================================
+--
+-- WHAT THIS MOD DOES
+--   Quick Mall provides a one-click "mall" blueprint builder. The player opens a
+--   small GUI (via the shortcut / custom input "quick-mall-open"), picks an item
+--   to craft, a crafting building, a recipe, input/output logistic chests, and an
+--   inserter type. Pressing "Build Quick Mall" constructs a blueprint in the
+--   player's cursor containing:
+--     - the chosen crafting building (with the recipe/quality preset),
+--     - an input logistic chest requesting one stack of each solid ingredient,
+--       plus an inserter feeding the building,
+--     - an output logistic chest (with an optional stack/bar limit) plus an
+--       inserter pulling finished products out.
+--   Chests/inserters are only added when the recipe actually has solid
+--   inputs/outputs.
+--
+-- OVERALL FLOW
+--   1. build_gui(player) creates the window and seeds per-player `options` from
+--      saved state, computing the available building/recipe/chest/inserter lists.
+--   2. GUI events (on_gui_click / on_gui_elem_changed / on_gui_text_changed)
+--      update `options` and re-render the affected icon rows via the render_*
+--      and refresh_* helpers.
+--   3. handle_create_click(player) validates the current selection, computes
+--      blueprint geometry, builds the blueprint entities, and places the
+--      blueprint in the cursor. The crafting building carries both a `recipe`
+--      field and `quick_mall_recipe` / `quick_mall_recipe_quality` tags.
+--   4. When a ghost or entity from that blueprint is built (on_built_entity /
+--      on_robot_built_entity), apply_ghost_tags re-applies the recipe + quality
+--      to assembling-machines from the tags (belt-and-suspenders for cases where
+--      the blueprint `recipe` field alone is not honored).
+--
+-- FACTORIO 1.1 / 2.0 COMPATIBILITY STRATEGY
+--   The file is written to run under both Factorio 1.1 and 2.0:
+--     - Saved state: 2.0 uses the `storage` global, 1.1 used `global`.
+--       get_storage_root() picks whichever exists.
+--     - Prototype access: 1.1/2.0 offer game.entity_prototypes /
+--       game.item_prototypes / game.get_entity_prototype etc.; 2.0 also exposes
+--       the read-only `prototypes` global (prototypes.entity / prototypes.item).
+--       The get_*_prototypes / resolve_*_prototype helpers try each API in turn
+--       (wrapped in pcall) so a missing API on either version degrades gracefully.
+--     - Logistic-chest names differ across versions/mods, so chest candidates
+--       carry `aliases` that resolve_candidate_name falls back to.
+--
+-- NOTE: `building_candidates_cache` is a derived, module-local memo (NOT part of
+-- the save file); it is invalidated on init / configuration / research events.
+-- =============================================================================
+
 local GUI_ROOT = "quick-mall-window"
 local GUI_ITEM = "quick-mall-item"
 local GUI_RECIPE_FLOW = "quick-mall-recipe-flow"
@@ -19,6 +68,7 @@ local GUI_QUALITY_WARNING = "quick-mall-quality-warning"
 local GUI_CREATE = "quick-mall-create"
 local GUI_CLOSE = "quick-mall-close"
 
+-- Optional test module; exposed later via the "quick_mall" remote interface.
 local tests = require("tests")
 
 -- Read-only derived cache of candidate crafting buildings (placeable + has
@@ -28,6 +78,12 @@ local tests = require("tests")
 -- save file). It is invalidated on init/configuration changes.
 local building_candidates_cache = nil
 
+-- === Candidate option tables ===
+-- Fallback/ordering hints. Each entry is { name, label, aliases? }. `name` is the
+-- preferred prototype name; `aliases` list alternate prototype names to try when
+-- `name` is not present (handles 1.1 vs 2.0 vs modded logistic-chest naming).
+
+-- Fallback crafting buildings used only if the dynamic candidate scan finds none.
 local STATIC_BUILDING_CANDIDATES = {
   { name = "assembling-machine-1", label = "Assembler 1" },
   { name = "assembling-machine-2", label = "Assembler 2" },
@@ -93,6 +149,11 @@ local INSERTER_CANDIDATES = {
   { name = "stack-inserter", label = "Stack Inserter" },
 }
 
+-- === Prototype resolution helpers (1.1 / 2.0 compatible) ===
+
+-- Returns the table of all entity prototypes (keyed by name), trying the
+-- standard game API, then the 2.0 `prototypes.entity` global, then a filtered
+-- query. Returns {} if none is available.
 local function get_entity_prototypes()
   -- Factorio 1.1/2.0 Standard API
   local ok, res = pcall(function()
@@ -120,6 +181,8 @@ local function get_entity_prototypes()
   return {}
 end
 
+-- Resolves a single entity prototype by name, or nil if unknown/unavailable.
+-- Tries the direct getter, then the 2.0 global, then the full-table lookup.
 local function resolve_entity_prototype(entity_name)
   if not entity_name then return nil end
 
@@ -147,6 +210,8 @@ local function resolve_entity_prototype(entity_name)
   return nil
 end
 
+-- Returns the table of all item prototypes (keyed by name), or {} if none is
+-- available. Same version-fallback approach as get_entity_prototypes.
 local function get_item_prototypes()
   -- Factorio 1.1/2.0 Standard API
   local ok, res = pcall(function()
@@ -164,6 +229,7 @@ local function get_item_prototypes()
   return {}
 end
 
+-- Resolves a single item prototype by name, or nil if unknown/unavailable.
 local function resolve_item_prototype(item_name)
   if not item_name then return nil end
 
@@ -191,10 +257,15 @@ local function resolve_item_prototype(item_name)
   return nil
 end
 
+-- True when prototype lookups appear to be working (probes the vanilla
+-- "inserter"). Used to decide whether option lists can be filtered confidently.
 local function can_resolve_prototypes()
   return resolve_entity_prototype("inserter") ~= nil
 end
 
+-- Returns the first resolvable prototype name for a candidate: its `name`, else
+-- one of its `aliases`, else nil. Lets a candidate map to whichever naming the
+-- current game/mods use.
 local function resolve_candidate_name(candidate)
   if resolve_entity_prototype(candidate.name) then
     return candidate.name
@@ -209,6 +280,12 @@ local function resolve_candidate_name(candidate)
   return nil
 end
 
+-- === Option-list builders ===
+
+-- Turns a candidate table into a { names, labels, uncertain } option list for
+-- the GUI. When prototypes resolve, keeps only candidates that actually exist
+-- (mapped through aliases); otherwise falls back to listing all candidates and
+-- flags `uncertain = true`. Guarantees at least one entry.
 local function build_option_list(candidates)
   local names = {}
   local labels = {}
@@ -246,11 +323,17 @@ local function build_option_list(candidates)
   return { names = names, labels = labels, uncertain = uncertain }
 end
 
+-- === Misc GUI / recipe helpers ===
+
+-- Returns an entity's localised_name (for tooltips), falling back to the raw
+-- name when the prototype cannot be resolved.
 local function get_localised_entity_name(entity_name)
   local prototype = resolve_entity_prototype(entity_name)
   return prototype and prototype.localised_name or entity_name
 end
 
+-- Recursively searches a GUI element subtree for a descendant with the given
+-- name (matching the element itself too). Returns the element or nil.
 local function find_child_by_name(element, name)
   if not (element and element.valid) then
     return nil
@@ -270,6 +353,8 @@ local function find_child_by_name(element, name)
   return nil
 end
 
+-- True if the recipe has at least one solid (item, not fluid) ingredient.
+-- Handles both the named-field and positional ingredient shapes.
 local function has_solid_inputs(recipe)
   if not recipe then return false end
   for _, ingredient in pairs(recipe.ingredients or {}) do
@@ -282,6 +367,7 @@ local function has_solid_inputs(recipe)
   return false
 end
 
+-- True if the recipe produces at least one solid (item) product.
 local function has_solid_outputs(recipe)
   if not recipe then return false end
   local products = recipe.products or {}
@@ -293,6 +379,11 @@ local function has_solid_outputs(recipe)
   return false
 end
 
+-- === GUI render / refresh helpers ===
+
+-- Shows or hides the quality-warning label based on the current selection:
+-- fluids and fluid-only-input recipes cannot produce above-normal quality, so a
+-- note is shown when a non-normal quality is chosen for such a recipe.
 local function update_quality_warning(player, frame, options)
   local warning_label = frame and find_child_by_name(frame, GUI_QUALITY_WARNING)
   if not warning_label then return end
@@ -328,6 +419,8 @@ local function update_quality_warning(player, frame, options)
   end
 end
 
+-- Rebuilds the building icon row from options.buildings, marking the selected
+-- one toggled. Shows a placeholder label when there are no options.
 local function render_building_buttons(frame, options)
   local building_icons = frame and find_child_by_name(frame, GUI_BUILDING_FLOW)
   if not building_icons then
@@ -353,6 +446,8 @@ local function render_building_buttons(frame, options)
   end
 end
 
+-- Rebuilds the input-chest icon row. If the selected recipe has no solid inputs,
+-- shows a "No solid input items" label instead (no chest is needed).
 local function render_input_chest_buttons(frame, options, force)
   local input_icons = frame and find_child_by_name(frame, GUI_INPUT_FLOW)
   if not input_icons then
@@ -381,6 +476,8 @@ local function render_input_chest_buttons(frame, options, force)
   end
 end
 
+-- Rebuilds the output-chest icon row. If the selected recipe has no solid
+-- outputs, shows a "No solid output items" label instead.
 local function render_output_chest_buttons(frame, options, force)
   local output_icons = frame and find_child_by_name(frame, GUI_OUTPUT_FLOW)
   if not output_icons then
@@ -409,6 +506,9 @@ local function render_output_chest_buttons(frame, options, force)
   end
 end
 
+-- Rebuilds the "Output Stacks Limit" row: a numeric textfield (seeded from
+-- options.stack_limit) that sets the output chest's bar. Hidden as a label when
+-- the recipe has no solid outputs.
 local function render_stack_limit_ui(frame, options, force)
   local flow = frame and find_child_by_name(frame, GUI_STACK_LIMIT_FLOW)
   if not flow then return end
@@ -435,6 +535,12 @@ local function render_stack_limit_ui(frame, options, force)
   stack_limit.style.width = 50
 end
 
+-- === Recipe filtering & surface compatibility ===
+
+-- True if the recipe can be crafted on the given surface. Checks the recipe
+-- prototype's surface_conditions (2.0 planet properties) against the surface's
+-- properties; treats a missing property as 0. Recipes with no conditions (or
+-- when recipe/surface is nil) are considered compatible.
 local function is_recipe_compatible_with_surface(recipe, surface)
   if not (recipe and surface) then return true end
   
@@ -464,6 +570,9 @@ local function is_recipe_compatible_with_surface(recipe, surface)
   return true
 end
 
+-- Returns a list of recipe objects that are enabled for the force, compatible
+-- with the surface, and produce the given item. `item_name` may be a plain name
+-- or a signal/table with a `.name` field.
 local function get_recipes_for_item(force, item_name, surface)
   local name_to_check = item_name
   if type(item_name) == "table" then
@@ -485,6 +594,9 @@ local function get_recipes_for_item(force, item_name, surface)
   return results
 end
 
+-- Picks a single recipe producing the item. With no building prototype, returns
+-- the first valid recipe; otherwise returns the first whose category the building
+-- can craft. Returns nil if none qualify.
 local function find_recipe_for_item(force, item_name, building_prototype, surface)
   local valid_recipes = get_recipes_for_item(force, item_name, surface)
   if #valid_recipes == 0 then return nil end
@@ -501,6 +613,9 @@ local function find_recipe_for_item(force, item_name, building_prototype, surfac
   return nil
 end
 
+-- Rebuilds the recipe icon row from options.recipes (buttons named by 1-based
+-- index), marking options.recipe_selection_index toggled. Shows a placeholder
+-- when there are no options.
 local function render_recipe_buttons(frame, options)
   local recipe_icons = frame and find_child_by_name(frame, GUI_RECIPE_FLOW)
   if not recipe_icons then
@@ -525,6 +640,8 @@ local function render_recipe_buttons(frame, options)
     button.toggled = (options.recipe_selection_index == i)
   end
 end
+
+-- === Candidate building / recipe option builders ===
 
 -- Build (once) and memoize the set of "candidate crafting buildings". This scan
 -- (placeable + has crafting_categories + not hidden + not recycler) does NOT
@@ -583,6 +700,11 @@ local function get_candidate_buildings()
   return candidates
 end
 
+-- Builds the { names, labels } list of buildings that can craft `item_name` on
+-- the surface. Pre-filters the item's recipes once, then keeps candidate
+-- buildings whose crafting_categories cover any of those recipes; falls back to
+-- STATIC_BUILDING_CANDIDATES if nothing matched. Result is sorted by prototype
+-- order. Returns a single {nil} entry when there are no options.
 local function build_building_options(player, force, item_name, surface)
   local name_to_check = item_name
   if type(item_name) == "table" then
@@ -676,6 +798,7 @@ local function build_building_options(player, force, item_name, surface)
   return { names = names, labels = labels }
 end
 
+-- True if the recipe is enabled and lists item_name among its products.
 local function recipe_outputs_item(recipe, item_name)
   if not recipe or not recipe.enabled then
     return false
@@ -690,6 +813,7 @@ local function recipe_outputs_item(recipe, item_name)
   return false
 end
 
+-- True if the building's crafting_categories include the recipe's category.
 local function recipe_usable_in_building(recipe, building_prototype)
   if not (recipe and building_prototype) then
     return false
@@ -699,6 +823,10 @@ local function recipe_usable_in_building(recipe, building_prototype)
   return categories[recipe.category] == true
 end
 
+-- Builds the { names, labels } list of recipes producing `item_name` that the
+-- named building can craft on the surface (names sorted, labels localised).
+-- Returns a single {nil} entry when the item/building is missing or nothing
+-- matches.
 local function build_recipe_options(force, item_name, building_name, surface)
   local name_to_check = item_name
   if type(item_name) == "table" then
@@ -743,6 +871,11 @@ local function build_recipe_options(force, item_name, building_name, surface)
   return { names = names, labels = labels }
 end
 
+-- === Storage / global state ===
+
+-- Returns the mod's persistent root table, creating its `quick_mall.options`
+-- substructure (per-player options keyed by player index). Uses `storage` on
+-- 2.0 and `global` on 1.1; returns nil if neither exists.
 local function get_storage_root()
   -- Factorio 2.0 uses 'storage', 1.1 uses 'global'
   local root = nil
@@ -761,16 +894,24 @@ local function get_storage_root()
   return root.quick_mall
 end
 
+-- Ensures the storage root/substructure exists (side-effect of get_storage_root).
 local function ensure_global()
   get_storage_root()
 end
 
+-- === GUI lifecycle & blueprint construction ===
+
+-- Destroys the Quick Mall window for the player if it is open.
 local function destroy_gui(player)
   if player.gui.screen[GUI_ROOT] then
     player.gui.screen[GUI_ROOT].destroy()
   end
 end
 
+-- Returns the building's footprint as (tile_width, tile_height), using the
+-- prototype's tile size when present, else deriving it from the selection or
+-- collision box; defaults to 1x1. Used to place chests/inserters clear of the
+-- building.
 local function get_entity_tile_size(prototype)
   if prototype.tile_width and prototype.tile_height then
     return prototype.tile_width, prototype.tile_height
@@ -786,6 +927,9 @@ local function get_entity_tile_size(prototype)
   return math.ceil(width), math.ceil(height)
 end
 
+-- Builds the input-chest logistic request list for a recipe: one full stack of
+-- each solid ingredient at the given quality. Each entry is
+-- { index, name, count, quality, comparator = "=" }.
 local function get_item_requests(player, recipe, quality)
   local requests = {}
   local index = 1
@@ -806,6 +950,9 @@ local function get_item_requests(player, recipe, quality)
   return requests
 end
 
+-- Returns (true, nil) if every placement can be placed on the surface, else
+-- (false, name) of the first placement that cannot be placed. Each placement is
+-- { name, position, direction? }.
 local function can_place_all(surface, force, placements)
   for _, placement in ipairs(placements) do
     local ok, can_place = pcall(function()
@@ -827,6 +974,15 @@ local function can_place_all(surface, force, placements)
   return true, nil
 end
 
+-- Constructs the list of blueprint-entity tables for the mall layout, relative to
+-- base_position:
+--   - the crafting building (with recipe, recipe_quality, and quick_mall_* tags),
+--   - an input chest with logistic request_filters + a feeding inserter (only when
+--     request_list is non-empty and an input chest is chosen),
+--   - an output chest (with an optional `bar` = stack_limit) + an extracting
+--     inserter (only when an output chest / inserter is chosen).
+-- chest_offset / inserter_offset are horizontal offsets to the west of the
+-- building. Each entity gets a sequential entity_number. Returns the entity list.
 local function build_blueprint_entities(
   base_position,
   building_name,
@@ -917,6 +1073,8 @@ local function build_blueprint_entities(
   return entities
 end
 
+-- Returns the list of names from `names` that do not resolve to an entity
+-- prototype (empty list means all valid).
 local function validate_entity_names(names)
   local missing = {}
   for _, name in ipairs(names) do
@@ -927,6 +1085,10 @@ local function validate_entity_names(names)
   return missing
 end
 
+-- Places a blueprint holding `entities` into the player's cursor. Clears a
+-- non-empty cursor first, sets a temporary blueprint stack, validates all entity
+-- names resolve, then writes the entities. Returns true on success, false if the
+-- cursor could not be prepared or any entity name is missing.
 local function give_blueprint_cursor(player, entities, request_list)
   local function cursor_is_empty(stack)
     if not (stack and stack.valid) then
@@ -971,6 +1133,11 @@ local function give_blueprint_cursor(player, entities, request_list)
   return false
 end
 
+-- If the player holds a Quick Mall blueprint (buildings tagged quick_mall_recipe)
+-- whose recipe is not compatible with the current surface, strips the recipe,
+-- quality, and tags from those buildings and clears all logistic request filters
+-- in the layout, then rewrites the blueprint and notifies the player. Used when
+-- the player changes surface while holding a mall blueprint.
 local function check_and_clear_incompatible_cursor_recipe(player)
   local stack = player.cursor_stack
   if not (stack and stack.valid and stack.valid_for_read and stack.is_blueprint) then
@@ -1010,6 +1177,9 @@ local function check_and_clear_incompatible_cursor_recipe(player)
   end
 end
 
+-- Builds elem_filters for the item chooser: one { filter = "name", name } per
+-- item/fluid produced by any enabled recipe, so the picker only offers craftable
+-- outputs.
 local function get_researched_item_filters(force)
   local item_names = {}
   for _, recipe in pairs(force.recipes) do
@@ -1029,6 +1199,8 @@ local function get_researched_item_filters(force)
   return filters
 end
 
+-- True if `selection` is present in `list` (used to keep a saved selection only
+-- when it still exists in the freshly built option list).
 local function is_valid_selection(selection, list)
   if not selection then return false end
   for _, name in ipairs(list) do
@@ -1037,6 +1209,14 @@ local function is_valid_selection(selection, list)
   return false
 end
 
+-- === GUI construction ===
+
+-- Builds (or rebuilds) the Quick Mall window for the player. Seeds the per-player
+-- `options` table from saved state, computes the building/recipe/chest/inserter
+-- option lists, validates/normalizes saved selections, persists options, then
+-- creates the frame: titlebar, a scroll-pane holding the item picker and the
+-- building/recipe/input/output/stack-limit/inserter rows plus a quality warning,
+-- and a Build button pinned below the scroll-pane. Finally renders each icon row.
 local function build_gui(player)
   ensure_global()
   destroy_gui(player)
@@ -1258,6 +1438,9 @@ local function build_gui(player)
   end
 end
 
+-- Recomputes the building options for the (possibly new) item, keeping the prior
+-- building selection when still valid (else the first option), and re-renders the
+-- building icon row.
 local function refresh_building_dropdown(player, item_name)
   ensure_global()
   local storage = get_storage_root()
@@ -1283,6 +1466,10 @@ local function refresh_building_dropdown(player, item_name)
   render_building_buttons(frame, options)
 end
 
+-- Recomputes recipe options for the current item + selected building, preserving
+-- the previously selected recipe by name (falling back to the first), and
+-- re-renders the recipe row plus the dependent chest/stack-limit rows and the
+-- quality warning.
 local function refresh_recipe_buttons(player, item_name)
   ensure_global()
   local storage = get_storage_root()
@@ -1320,6 +1507,13 @@ local function refresh_recipe_buttons(player, item_name)
   render_stack_limit_ui(frame, options, player.force)
 end
 
+-- Handles the "Build Quick Mall" button. Reads the chosen item/quality and the
+-- saved building/recipe/chest/inserter selections, resolves and validates a
+-- usable recipe (resetting quality to normal for fluids / fluid-only-input
+-- recipes), verifies all needed entities exist, computes the layout offsets from
+-- the building footprint, builds the blueprint entities, and hands the blueprint
+-- to the cursor. Prints an explanatory message and aborts on any failure; closes
+-- the GUI on success.
 local function handle_create_click(player)
   ensure_global()
   local storage = get_storage_root()
@@ -1452,6 +1646,11 @@ local function handle_create_click(player)
   destroy_gui(player)
 end
 
+-- === Ghost-tag application ===
+
+-- Re-applies a Quick Mall recipe/quality to a freshly built entity (or ghost)
+-- from its quick_mall_recipe / quick_mall_recipe_quality tags. Only acts on
+-- assembling-machines (real or ghost), which support set_recipe; no-op otherwise.
 local function apply_ghost_tags(entity, tags)
   if not (entity and entity.valid and tags) then
     return
@@ -1474,6 +1673,9 @@ local function apply_ghost_tags(entity, tags)
   end
 end
 
+-- === Event handlers ===
+
+-- On new game / mod first load: clear the derived cache and init storage.
 script.on_init(function()
   -- Reset the derived candidate-building cache (module local, never saved).
   building_candidates_cache = nil
@@ -1495,6 +1697,7 @@ script.on_event(defines.events.on_research_finished, function(event)
   building_candidates_cache = nil
 end)
 
+-- Custom input "quick-mall-open" (keybind): open the GUI for the player.
 script.on_event("quick-mall-open", function(event)
   local player = game.get_player(event.player_index)
   if player then
@@ -1502,6 +1705,7 @@ script.on_event("quick-mall-open", function(event)
   end
 end)
 
+-- Toolbar shortcut: open the GUI when the "quick-mall-open" shortcut is clicked.
 script.on_event(defines.events.on_lua_shortcut, function(event)
   if event.prototype_name ~= "quick-mall-open" then
     return
@@ -1513,6 +1717,10 @@ script.on_event(defines.events.on_lua_shortcut, function(event)
   end
 end)
 
+-- Dispatches GUI clicks by element name: Build, Close, or a building/recipe/
+-- input-chest/output-chest/inserter icon. Icon clicks update the corresponding
+-- selection in `options` and re-render the affected rows (recipe row rebuilds
+-- cascade to the chest/stack-limit rows).
 script.on_event(defines.events.on_gui_click, function(event)
   local player = game.get_player(event.player_index)
   if not player then
@@ -1610,6 +1818,8 @@ script.on_event(defines.events.on_gui_click, function(event)
   end
 end)
 
+-- Stack-limit textfield changes: store the parsed value in options.stack_limit
+-- (empty or 0 = "no limit"); ignores negatives.
 script.on_event(defines.events.on_gui_text_changed, function(event)
   local player = game.get_player(event.player_index)
   if not player then
@@ -1633,6 +1843,9 @@ script.on_event(defines.events.on_gui_text_changed, function(event)
   end
 end)
 
+-- Item-picker changes: record the new item, reset the recipe index, and refresh
+-- the building and recipe rows. Ignored during initial GUI setup
+-- (options.is_initializing) so seeding the picker does not trigger a refresh.
 script.on_event(defines.events.on_gui_elem_changed, function(event)
   local player = game.get_player(event.player_index)
   if not player then
@@ -1662,6 +1875,7 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
   end
 end)
 
+-- Reserved: no dropdowns currently use selection-state changes (kept as a no-op).
 script.on_event(defines.events.on_gui_selection_state_changed, function(event)
   local player = game.get_player(event.player_index)
   if not player then
@@ -1669,12 +1883,17 @@ script.on_event(defines.events.on_gui_selection_state_changed, function(event)
   end
 end)
 
+-- Closes the window when the game dispatches on_gui_closed for our root frame
+-- (e.g. the player presses Esc).
 script.on_event(defines.events.on_gui_closed, function(event)
   if event.element and event.element.valid and event.element.name == GUI_ROOT then
     event.element.destroy()
   end
 end)
 
+-- On surface change: strip surface-incompatible recipes from any Quick Mall
+-- blueprint in the cursor, then refresh the open GUI's building/recipe rows for
+-- the new surface.
 script.on_event(defines.events.on_player_changed_surface, function(event)
   local player = game.get_player(event.player_index)
   if not player then
@@ -1703,6 +1922,9 @@ script.on_event(defines.events.on_player_changed_surface, function(event)
   end
 end)
 
+-- Shared handler for on_built_entity / on_robot_built_entity: resolves the built
+-- entity and its tags (from the event, or the entity itself) and applies any
+-- Quick Mall recipe/quality via apply_ghost_tags.
 local function handle_built_entity(event)
   local entity = event.created_entity or event.entity
   if not entity or not entity.valid then

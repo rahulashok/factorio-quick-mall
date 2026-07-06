@@ -21,7 +21,7 @@ _Last updated: 2026-07-06_
 | 8   | `inserter_icons` local shadowing                                                                                                          | Minor           | Low      | 🟢 Done                       |
 | 9   | `local prototypes` shadows Factorio global                                                                                                | Minor           | Low      | 🟢 Done                       |
 | 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764                     | UX              | Low      | 🟢 Done                       |
-| 11  | Document the code                                                                                                                         | Optimization    | Low      | 🔴 Todo                       |
+| 11  | Document the code                                                                                                                         | Optimization    | Low      | 🟢 Done                       |
 | 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc | Optimization    | Medium   | 🔴 Todo                       |
 
 ---
@@ -67,6 +67,19 @@ _Last updated: 2026-07-06_
 - **Location:** `control.lua:1054` (calls `build_building_options` then `build_recipe_options`)
 - **Problem:** Both re-iterate `force.recipes` (via `get_recipes_for_item`).
 - **Fix:** Compute the valid-recipe list once and thread it through.
+
+### 11. Document the code
+- **Status:** 🟢 Done
+- **Location:** `control.lua` (comments only)
+- **Problem:** The ~1470-line `control.lua` had helpful comments in a few hot
+  spots but no file-level overview and no per-function documentation, making the
+  architecture hard to grasp quickly.
+- **Fix:** Added a file-level header block (mod purpose, GUI → blueprint → ghost-tag
+  flow, and the Factorio 1.1/2.0 compatibility strategy for `storage`/`global` and
+  `prototypes.*` vs `game.*_prototypes`), a concise doc-comment above every local
+  function and event handler, and section banners for navigation. Comments only —
+  no executable code changed; verified with `luac -p control.lua` (PARSE_OK). See
+  `docs/workitems/11-code-documentation.md`.
 
 ---
 

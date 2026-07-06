@@ -185,7 +185,10 @@
   },
   "active": "748f49309fed19c4",
   "lastOpenFiles": [
+    "workitems/11-code-documentation.md",
     "workitems/10-gui-overflow-scrollpane.md",
+    "workitems/01-is-fluid-undefined.md",
+    "TASKS.md",
     "workitems/09-prototypes-shadow.md",
     "workitems/08-inserter-icons-shadow.md",
     "workitems/07-stack-limit-ux.md",
@@ -193,7 +196,6 @@
     "workitems/05-building-options-cache.md",
     "workitems/04-dead-tag-path.md",
     "workitems/03-duplicate-functions.md",
-    "workitems/01-is-fluid-undefined.md",
     "workitems"
   ]
 }
