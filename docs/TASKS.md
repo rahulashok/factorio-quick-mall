@@ -19,7 +19,7 @@ _Last updated: 2026-07-06_
 | 6   | Redundant recipe scans in `build_gui`                                                                                 | Optimization    | Low      | 🟢 Done                       |
 | 7   | Stack-limit field silently ignores empty/`0` input                                                                    | UX              | Low      | 🟢 Done                       |
 | 8   | `inserter_icons` local shadowing                                                                                      | Minor           | Low      | 🟢 Done                       |
-| 9   | `local prototypes` shadows Factorio global                                                                            | Minor           | Low      | 🔴 Todo                       |
+| 9   | `local prototypes` shadows Factorio global                                                                            | Minor           | Low      | 🟢 Done                       |
 | 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764 | UX              | Low      | 🔴 Todo                       |
 
 ---
@@ -80,7 +80,7 @@ _Last updated: 2026-07-06_
 - **Location:** `control.lua:1249` shadows `control.lua:1193` in the same function.
 
 ### 9. `local prototypes` shadows the Factorio 2.0 global
-- **Status:** 🔴 Todo
+- **Status:** 🟢 Done
 - **Location:** `control.lua:537`
 - **Problem:** Safe today but fragile; rename the local.
 

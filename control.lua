@@ -537,10 +537,10 @@ local function get_candidate_buildings()
   end
 
   local candidates = {}
-  local prototypes = get_entity_prototypes()
+  local entity_prototypes = get_entity_prototypes()
 
-  if prototypes then
-    for name, prototype in pairs(prototypes) do
+  if entity_prototypes then
+    for name, prototype in pairs(entity_prototypes) do
       local is_valid = false
       pcall(function()
         local placeable = prototype.items_to_place_this and #prototype.items_to_place_this > 0
