@@ -1419,22 +1419,6 @@ local function apply_ghost_tags(entity, tags)
       entity.set_recipe(tags.quick_mall_recipe, quality)
     end
   end
-
-  if tags.quick_mall_requests then
-    local ok, setter = pcall(function()
-      return entity.set_request_slot
-    end)
-    if ok and setter then
-      for index, request in ipairs(tags.quick_mall_requests) do
-        local success = pcall(function()
-          setter(entity, request, index)
-        end)
-        if not success then
-          break
-        end
-      end
-    end
-  end
 end
 
 script.on_init(function()

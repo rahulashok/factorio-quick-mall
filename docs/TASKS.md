@@ -14,7 +14,7 @@ _Last updated: 2026-07-06_
 | 1   | `is_fluid` undefined in `handle_create_click`                                                                         | Bug             | High     | 🟢 Done                       |
 | 2   | Inserter directions appear swapped                                                                                    | Bug             | High     | 🔵 Needs In-Game Verification |
 | 3   | Duplicate function definitions shadow correct version                                                                 | Bug             | Medium   | 🟢 Done                       |
-| 4   | Dead `quick_mall_requests` tag-application path                                                                       | Bug (dead code) | Low      | 🔴 Todo                       |
+| 4   | Dead `quick_mall_requests` tag-application path                                                                       | Bug (dead code) | Low      | 🟢 Done                       |
 | 5   | `build_building_options` re-scans all prototypes per item change                                                      | Optimization    | Medium   | 🔴 Todo                       |
 | 6   | Redundant recipe scans in `build_gui`                                                                                 | Optimization    | Low      | 🔴 Todo                       |
 | 7   | Stack-limit field silently ignores empty/`0` input                                                                    | UX              | Low      | 🔴 Todo                       |
@@ -45,7 +45,7 @@ _Last updated: 2026-07-06_
 - **Fix:** Delete the dead first copies; keep the intended behavior for cursor-clearing (decide whether request filters should also be cleared).
 
 ### 4. Dead `quick_mall_requests` tag-application path
-- **Status:** 🔴 Todo
+- **Status:** 🟢 Done
 - **Location:** `control.lua:1473`
 - **Problem:** `apply_ghost_tags` handles `tags.quick_mall_requests`, but nothing ever writes that tag — requests live in the chest's `request_filters`. The `set_request_slot` block never executes. The ghost `set_recipe` re-application is also redundant since the blueprint entity already carries `recipe`.
 - **Fix:** Remove the dead branch (and redundant re-set) for clarity.
