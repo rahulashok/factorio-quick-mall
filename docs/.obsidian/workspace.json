@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "workitems/12-split-control-into-modules.md",
+                "file": "TASKS.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "12-split-control-into-modules"
+              "title": "TASKS"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "workitems/12-split-control-into-modules.md",
+                "file": "TASKS.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for 12-split-control-into-modules"
+              "title": "Backlinks for TASKS"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "workitems/12-split-control-into-modules.md",
+                "file": "TASKS.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from 12-split-control-into-modules"
+              "title": "Outgoing links from TASKS"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "workitems/12-split-control-into-modules.md",
+                "file": "TASKS.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of 12-split-control-into-modules"
+              "title": "Outline of TASKS"
             }
           }
         ]
@@ -185,10 +185,10 @@
   },
   "active": "748f49309fed19c4",
   "lastOpenFiles": [
-    "workitems/11-code-documentation.md",
-    "workitems/12-split-control-into-modules.md",
-    "TASKS.md",
     "workitems/08-inserter-icons-shadow.md",
+    "TASKS.md",
+    "workitems/12-split-control-into-modules.md",
+    "workitems/11-code-documentation.md",
     "workitems/09-prototypes-shadow.md",
     "workitems/05-building-options-cache.md",
     "workitems/03-duplicate-functions.md",
