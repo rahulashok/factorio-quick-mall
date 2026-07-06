@@ -22,7 +22,7 @@ _Last updated: 2026-07-06_
 | 9   | `local prototypes` shadows Factorio global                                                                                                | Minor           | Low      | 🟢 Done                       |
 | 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764                     | UX              | Low      | 🟢 Done                       |
 | 11  | Document the code                                                                                                                         | Optimization    | Low      | 🟢 Done                       |
-| 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc | Optimization    | Medium   | 🔴 Todo                       |
+| 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc | Optimization    | Medium   | 🟢 Done                       |
 
 ---
 
@@ -80,6 +80,25 @@ _Last updated: 2026-07-06_
   function and event handler, and section banners for navigation. Comments only —
   no executable code changed; verified with `luac -p control.lua` (PARSE_OK). See
   `docs/workitems/11-code-documentation.md`.
+
+### 12. Break `control.lua` into smaller separate files
+- **Status:** 🟢 Done — 🔵 **Needs in-game verification** (module loading / `require`
+  resolution and runtime cross-module calls cannot be checked by `luac -p`).
+- **Location:** `control.lua` (was ~1959 lines) → `control.lua` entry point + new
+  `scripts/` modules.
+- **Problem:** Everything lived in one file as file-local values calling each other
+  via lexical scope, making the file hard to navigate and impossible to work on in
+  isolation.
+- **Fix:** Extracted the implementation into six `require`d modules, each returning
+  a table: `scripts/constants.lua`, `scripts/prototypes.lua`, `scripts/storage.lua`,
+  `scripts/recipes.lua`, `scripts/blueprint.lua`, `scripts/gui.lua`. `control.lua`
+  remains the runtime entry point: it requires the modules, keeps `apply_ghost_tags`
+  and `handle_built_entity`, and registers every `script.on_*` handler and the
+  `quick_mall` remote interface exactly once. Purely mechanical move — no logic,
+  string, element-name, or blueprint-shape changes. Acyclic dependency graph
+  (`constants <- prototypes <- recipes <- blueprint <- gui`; `storage` standalone).
+  `luac -p` passes on all seven files. See
+  `docs/workitems/12-split-control-into-modules.md`.
 
 ---
 
