@@ -122,7 +122,8 @@ _Last updated: 2026-07-06_
 - **Status:** 🟢 Done
 - **Location:** `control.lua` `build_gui`
 - **Problem:** The task title ("entity overflow error") is misleading. The linked mod-portal discussion is a GUI sizing issue: in a heavily-modded game the building/recipe/chest/inserter icon lists make the window grow taller than the screen, cutting off the "Build Quick Mall" button (`GUI_CREATE`). A user at 75% UI scale could not reach it.
-- **Fix:** Wrapped the middle selection rows in a `scroll-pane` with `maximum_height = 500` so the content scrolls instead of growing the window, and moved `button_flow` (with `GUI_CREATE`) directly onto `frame` after the scroll-pane so the Build button is always visible. No element names changed; `find_child_by_name` still resolves everything (it recurses). See `docs/workitems/10-gui-overflow-scrollpane.md`. Needs in-game spot-check (🔵).
+- **Fix:** Wrapped the middle selection rows in a `scroll-pane` with `maximal_height = 500` so the content scrolls instead of growing the window, and moved `button_flow` (with `GUI_CREATE`) directly onto `frame` after the scroll-pane so the Build button is always visible. No element names changed; `find_child_by_name` still resolves everything (it recurses). See `docs/workitems/10-gui-overflow-scrollpane.md`.
+- **Runtime fix (2026-07-06):** Initial version used `maximum_height`, an invalid LuaStyle key that crashed on GUI open (`LuaStyle doesn't contain key maximum_height`, `scripts/gui.lua:368`). Corrected to `maximal_height`. `luac -p` could not catch this — the key is only rejected by the game at runtime.
 
 ---
 

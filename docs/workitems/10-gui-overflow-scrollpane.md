@@ -48,7 +48,7 @@ local scroll_pane = frame.add({
   horizontal_scroll_policy = "never",
   vertical_scroll_policy = "auto",
 })
-scroll_pane.style.maximum_height = 500
+scroll_pane.style.maximal_height = 500
 
 local content = scroll_pane.add({ type = "flow", direction = "vertical" })
 content.style.padding = 12
@@ -79,12 +79,28 @@ Notes:
   `render_recipe_buttons`, `render_input_chest_buttons`,
   `render_output_chest_buttons`, `render_stack_limit_ui`, and the inserter
   toggle loop) are all preserved unchanged.
-- `maximum_height = 500` is a conservative fixed value that fits typical
+- `maximal_height = 500` is a conservative fixed value that fits typical
   screens including reduced UI scales. If needed it could later be computed from
   `player.display_resolution` / `player.display_scale`, but a fixed value is
   safe and keeps behavior predictable.
 
 Parse-checked with `luac -p control.lua` → PARSE_OK.
+
+## Runtime fix (2026-07-06, after in-game report)
+The original implementation set `scroll_pane.style.maximum_height`, which is
+**not a valid LuaStyle key** — Factorio raised a non-recoverable runtime error
+on GUI open:
+
+```
+LuaStyle doesn't contain key maximum_height.
+  scripts/gui.lua:368: in function 'build_gui'
+```
+
+`luac -p` could not catch this (it is a valid Lua statement; the key is only
+rejected at runtime by the game). Fixed by using the correct property name,
+`maximal_height` (LuaStyle uses `minimal_height`/`maximal_height`, not
+`minimum_`/`maximum_`). Verified against the LuaStyle API docs. This lives in
+`scripts/gui.lua` after the workitem-12 module split.
 
 ## In-game verification
 This is a layout change to a live GUI; it should be spot-checked in-game to

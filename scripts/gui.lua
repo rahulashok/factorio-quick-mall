@@ -365,7 +365,7 @@ local function build_gui(player)
     horizontal_scroll_policy = "never",
     vertical_scroll_policy = "auto",
   })
-  scroll_pane.style.maximum_height = 500
+  scroll_pane.style.maximal_height = 500
 
   local content = scroll_pane.add({ type = "flow", direction = "vertical" })
   content.style.padding = 12

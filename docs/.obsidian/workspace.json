@@ -13,12 +13,12 @@
             "state": {
               "type": "markdown",
               "state": {
-                "file": "TASKS.md",
+                "file": "workitems/12-split-control-into-modules.md",
                 "mode": "source",
                 "source": false
               },
               "icon": "lucide-file",
-              "title": "TASKS"
+              "title": "12-split-control-into-modules"
             }
           }
         ]
@@ -94,7 +94,7 @@
             "state": {
               "type": "backlink",
               "state": {
-                "file": "TASKS.md",
+                "file": "workitems/12-split-control-into-modules.md",
                 "collapseAll": false,
                 "extraContext": false,
                 "sortOrder": "alphabetical",
@@ -104,7 +104,7 @@
                 "unlinkedCollapsed": true
               },
               "icon": "links-coming-in",
-              "title": "Backlinks for TASKS"
+              "title": "Backlinks for 12-split-control-into-modules"
             }
           },
           {
@@ -113,12 +113,12 @@
             "state": {
               "type": "outgoing-link",
               "state": {
-                "file": "TASKS.md",
+                "file": "workitems/12-split-control-into-modules.md",
                 "linksCollapsed": false,
                 "unlinkedCollapsed": true
               },
               "icon": "links-going-out",
-              "title": "Outgoing links from TASKS"
+              "title": "Outgoing links from 12-split-control-into-modules"
             }
           },
           {
@@ -156,13 +156,13 @@
             "state": {
               "type": "outline",
               "state": {
-                "file": "TASKS.md",
+                "file": "workitems/12-split-control-into-modules.md",
                 "followCursor": false,
                 "showSearch": false,
                 "searchQuery": ""
               },
               "icon": "lucide-list",
-              "title": "Outline of TASKS"
+              "title": "Outline of 12-split-control-into-modules"
             }
           }
         ]
@@ -185,8 +185,8 @@
   },
   "active": "748f49309fed19c4",
   "lastOpenFiles": [
-    "workitems/12-split-control-into-modules.md",
     "workitems/11-code-documentation.md",
+    "workitems/12-split-control-into-modules.md",
     "TASKS.md",
     "workitems/08-inserter-icons-shadow.md",
     "workitems/09-prototypes-shadow.md",
