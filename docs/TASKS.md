@@ -15,7 +15,7 @@ _Last updated: 2026-07-06_
 | 2   | Inserter directions appear swapped                                                                                    | Bug             | High     | 🔵 Needs In-Game Verification |
 | 3   | Duplicate function definitions shadow correct version                                                                 | Bug             | Medium   | 🟢 Done                       |
 | 4   | Dead `quick_mall_requests` tag-application path                                                                       | Bug (dead code) | Low      | 🟢 Done                       |
-| 5   | `build_building_options` re-scans all prototypes per item change                                                      | Optimization    | Medium   | 🔴 Todo                       |
+| 5   | `build_building_options` re-scans all prototypes per item change                                                      | Optimization    | Medium   | 🟢 Done                       |
 | 6   | Redundant recipe scans in `build_gui`                                                                                 | Optimization    | Low      | 🔴 Todo                       |
 | 7   | Stack-limit field silently ignores empty/`0` input                                                                    | UX              | Low      | 🔴 Todo                       |
 | 8   | `inserter_icons` local shadowing                                                                                      | Minor           | Low      | 🔴 Todo                       |
@@ -55,7 +55,7 @@ _Last updated: 2026-07-06_
 ## Optimizations
 
 ### 5. `build_building_options` re-scans all entity prototypes per item change
-- **Status:** 🔴 Todo
+- **Status:** 🟢 Done
 - **Location:** `control.lua:522`
 - **Problem:** Runs on every item change, iterating all entity prototypes and allocating nested `pcall` closures per prototype. Hot path with large modpacks.
 - **Fix:** Cache the "placeable + has crafting_categories + not hidden + not recycler" building set once (invalidate on research/config change); re-filter by recipe category per item.

@@ -21,6 +21,13 @@ local GUI_CLOSE = "quick-mall-close"
 
 local tests = require("tests")
 
+-- Read-only derived cache of candidate crafting buildings (placeable + has
+-- crafting_categories + not hidden + not recycler). This depends only on the
+-- entity prototypes, NOT on the selected item, so it is computed once and
+-- memoized here. It must NEVER be stored in `storage`/`global` (not part of the
+-- save file). It is invalidated on init/configuration changes.
+local building_candidates_cache = nil
+
 local STATIC_BUILDING_CANDIDATES = {
   { name = "assembling-machine-1", label = "Assembler 1" },
   { name = "assembling-machine-2", label = "Assembler 2" },
@@ -519,6 +526,63 @@ local function render_recipe_buttons(frame, options)
   end
 end
 
+-- Build (once) and memoize the set of "candidate crafting buildings". This scan
+-- (placeable + has crafting_categories + not hidden + not recycler) does NOT
+-- depend on the selected item, so it is safe to compute a single time and reuse
+-- across item changes. Only the per-item recipe-category filter varies.
+-- The cache is invalidated on init/configuration changes.
+local function get_candidate_buildings()
+  if building_candidates_cache then
+    return building_candidates_cache
+  end
+
+  local candidates = {}
+  local prototypes = get_entity_prototypes()
+
+  if prototypes then
+    for name, prototype in pairs(prototypes) do
+      local is_valid = false
+      pcall(function()
+        local placeable = prototype.items_to_place_this and #prototype.items_to_place_this > 0
+        local has_categories = prototype.crafting_categories and next(prototype.crafting_categories) ~= nil
+
+        local is_hidden = false
+        pcall(function()
+          if prototype.has_flag("hidden") then
+            is_hidden = true
+          end
+        end)
+
+        if placeable and has_categories and not is_hidden then
+          is_valid = true
+        end
+      end)
+
+      if is_valid then
+        -- Exclude recyclers and other non-production buildings
+        if name:find("recycler", 1, true) then
+          is_valid = false
+        end
+      end
+
+      if is_valid then
+        table.insert(candidates, {
+          name = name,
+          label = prototype.localised_name or name,
+          order = prototype.order or "z",
+          -- Reference to the prototype's crafting_categories table (used as a
+          -- set: categories[recipe.category]) so the per-item filter can test
+          -- categories without re-reading the prototype.
+          crafting_categories = prototype.crafting_categories or {},
+        })
+      end
+    end
+  end
+
+  building_candidates_cache = candidates
+  return candidates
+end
+
 local function build_building_options(player, force, item_name, surface)
   local name_to_check = item_name
   if type(item_name) == "table" then
@@ -534,60 +598,32 @@ local function build_building_options(player, force, item_name, surface)
     end
   end
 
-  local prototypes = get_entity_prototypes()
+  local candidates = get_candidate_buildings()
   local entries = {}
   local found_names = {}
 
-  if prototypes then
-    for name, prototype in pairs(prototypes) do
-      local is_valid = false
-      pcall(function()
-        local placeable = prototype.items_to_place_this and #prototype.items_to_place_this > 0
-        local has_categories = prototype.crafting_categories and next(prototype.crafting_categories) ~= nil
-        
-        local is_hidden = false
-        pcall(function()
-          if prototype.has_flag("hidden") then
-            is_hidden = true
-          end
-        end)
-        
-        if placeable and has_categories and not is_hidden then
-          is_valid = true
-        end
-      end)
-
-      if is_valid then
-        -- Exclude recyclers and other non-production buildings
-        if name:find("recycler", 1, true) then
-          is_valid = false
-        end
-      end
-
-      if is_valid then
-        local building_can_craft = false
-        if not name_to_check then
+  for _, candidate in ipairs(candidates) do
+    local building_can_craft = false
+    if not name_to_check then
+      building_can_craft = true
+    else
+      -- EXTREMELY FAST CHECK: Does this building support ANY of the pre-filtered recipes?
+      local building_categories = candidate.crafting_categories or {}
+      for _, recipe in ipairs(valid_recipes) do
+        if building_categories[recipe.category] then
           building_can_craft = true
-        else
-          -- EXTREMELY FAST CHECK: Does this building support ANY of the pre-filtered recipes?
-          local building_categories = prototype.crafting_categories or {}
-          for _, recipe in ipairs(valid_recipes) do
-            if building_categories[recipe.category] then
-              building_can_craft = true
-              break
-            end
-          end
-        end
-
-        if building_can_craft then
-          table.insert(entries, {
-            name = name,
-            label = prototype.localised_name or name,
-            order = prototype.order or "z"
-          })
-          found_names[name] = true
+          break
         end
       end
+    end
+
+    if building_can_craft then
+      table.insert(entries, {
+        name = candidate.name,
+        label = candidate.label,
+        order = candidate.order
+      })
+      found_names[candidate.name] = true
     end
   end
 
@@ -1422,7 +1458,24 @@ local function apply_ghost_tags(entity, tags)
 end
 
 script.on_init(function()
+  -- Reset the derived candidate-building cache (module local, never saved).
+  building_candidates_cache = nil
   ensure_global()
+end)
+
+script.on_configuration_changed(function(event)
+  -- Mod/version changes can add, remove, or alter entity prototypes, so the
+  -- memoized candidate-building set must be rebuilt on next use.
+  building_candidates_cache = nil
+  ensure_global()
+end)
+
+script.on_event(defines.events.on_research_finished, function(event)
+  -- Research does NOT change the candidate BUILDING set (placeable/categories/
+  -- hidden are prototype properties), only recipe availability, which is handled
+  -- by the per-item recipe filter. Reset defensively to stay robust to any
+  -- prototype-affecting mod interactions.
+  building_candidates_cache = nil
 end)
 
 script.on_event("quick-mall-open", function(event)
