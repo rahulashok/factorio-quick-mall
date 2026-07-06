@@ -1606,9 +1606,14 @@ script.on_event(defines.events.on_gui_text_changed, function(event)
     local options = storage and storage.options[player.index]
     if options then
       local val = tonumber(event.element.text)
-      if val and val > 0 then
+      if val == nil then
+        -- Empty field means "no limit"; store 0 so state tracks the field.
+        options.stack_limit = 0
+      elseif val >= 0 then
+        -- 0 = "no limit" (build_blueprint_entities treats 0 as no bar).
         options.stack_limit = val
       end
+      -- Negative values are ignored (textfield also disallows them).
     end
   end
 end)

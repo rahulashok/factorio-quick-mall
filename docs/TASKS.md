@@ -17,7 +17,7 @@ _Last updated: 2026-07-06_
 | 4   | Dead `quick_mall_requests` tag-application path                                                                       | Bug (dead code) | Low      | 🟢 Done                       |
 | 5   | `build_building_options` re-scans all prototypes per item change                                                      | Optimization    | Medium   | 🟢 Done                       |
 | 6   | Redundant recipe scans in `build_gui`                                                                                 | Optimization    | Low      | 🟢 Done                       |
-| 7   | Stack-limit field silently ignores empty/`0` input                                                                    | UX              | Low      | 🔴 Todo                       |
+| 7   | Stack-limit field silently ignores empty/`0` input                                                                    | UX              | Low      | 🟢 Done                       |
 | 8   | `inserter_icons` local shadowing                                                                                      | Minor           | Low      | 🔴 Todo                       |
 | 9   | `local prototypes` shadows Factorio global                                                                            | Minor           | Low      | 🔴 Todo                       |
 | 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764 | UX              | Low      | 🔴 Todo                       |
@@ -71,7 +71,7 @@ _Last updated: 2026-07-06_
 ## UX / Minor
 
 ### 7. Stack-limit field silently ignores empty/`0` input
-- **Status:** 🔴 Todo
+- **Status:** 🟢 Done
 - **Location:** `control.lua:1619`
 - **Problem:** Clearing the field or typing `0` keeps the old value with no user feedback.
 
