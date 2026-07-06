@@ -933,25 +933,6 @@ local function give_blueprint_cursor(player, entities, request_list)
   return false
 end
 
-local function get_researched_item_filters(force)
-  local item_names = {}
-  for _, recipe in pairs(force.recipes) do
-    if recipe.enabled then
-      for _, product in pairs(recipe.products) do
-        if product.type == "item" or product.type == "fluid" then
-          item_names[product.name] = true
-        end
-      end
-    end
-  end
-
-  local filters = {}
-  for name, _ in pairs(item_names) do
-    table.insert(filters, { filter = "name", name = name })
-  end
-  return filters
-end
-
 local function check_and_clear_incompatible_cursor_recipe(player)
   local stack = player.cursor_stack
   if not (stack and stack.valid and stack.valid_for_read and stack.is_blueprint) then
@@ -1016,39 +997,6 @@ local function is_valid_selection(selection, list)
     if name == selection then return true end
   end
   return false
-end
-
-local function check_and_clear_incompatible_cursor_recipe(player)
-  local stack = player.cursor_stack
-  if not (stack and stack.valid and stack.valid_for_read and stack.is_blueprint) then
-    return
-  end
-
-  local entities = stack.get_blueprint_entities()
-  if not entities then return end
-
-  local changed = false
-  for _, entity in ipairs(entities) do
-    -- Only clear if it's one of OUR recipes (building or input chest with requests)
-    if entity.recipe and entity.tags and (entity.tags.quick_mall_recipe or entity.tags.quick_mall_requests) then
-      local recipe = player.force.recipes[entity.recipe]
-      if recipe and not is_recipe_compatible_with_surface(recipe, player.surface) then
-        entity.recipe = nil
-        entity.recipe_quality = nil
-        -- Also clear tags to be consistent
-        if entity.tags.quick_mall_recipe then
-          entity.tags.quick_mall_recipe = nil
-          entity.tags.quick_mall_recipe_quality = nil
-        end
-        changed = true
-      end
-    end
-  end
-
-  if changed then
-    stack.set_blueprint_entities(entities)
-    player.print("Quick Mall: cleared surface-incompatible recipe from blueprint.")
-  end
 end
 
 local function build_gui(player)

@@ -9,17 +9,18 @@ _Last updated: 2026-07-06_
 
 ## Summary
 
-| # | Item | Type | Severity | Status |
-|---|------|------|----------|--------|
-| 1 | `is_fluid` undefined in `handle_create_click` | Bug | High | 🟢 Done |
-| 2 | Inserter directions appear swapped | Bug | High | 🔵 Needs In-Game Verification |
-| 3 | Duplicate function definitions shadow correct version | Bug | Medium | 🔴 Todo |
-| 4 | Dead `quick_mall_requests` tag-application path | Bug (dead code) | Low | 🔴 Todo |
-| 5 | `build_building_options` re-scans all prototypes per item change | Optimization | Medium | 🔴 Todo |
-| 6 | Redundant recipe scans in `build_gui` | Optimization | Low | 🔴 Todo |
-| 7 | Stack-limit field silently ignores empty/`0` input | UX | Low | 🔴 Todo |
-| 8 | `inserter_icons` local shadowing | Minor | Low | 🔴 Todo |
-| 9 | `local prototypes` shadows Factorio global | Minor | Low | 🔴 Todo |
+| #   | Item                                                                                                                  | Type            | Severity | Status                        |
+| --- | --------------------------------------------------------------------------------------------------------------------- | --------------- | -------- | ----------------------------- |
+| 1   | `is_fluid` undefined in `handle_create_click`                                                                         | Bug             | High     | 🟢 Done                       |
+| 2   | Inserter directions appear swapped                                                                                    | Bug             | High     | 🔵 Needs In-Game Verification |
+| 3   | Duplicate function definitions shadow correct version                                                                 | Bug             | Medium   | 🟢 Done                       |
+| 4   | Dead `quick_mall_requests` tag-application path                                                                       | Bug (dead code) | Low      | 🔴 Todo                       |
+| 5   | `build_building_options` re-scans all prototypes per item change                                                      | Optimization    | Medium   | 🔴 Todo                       |
+| 6   | Redundant recipe scans in `build_gui`                                                                                 | Optimization    | Low      | 🔴 Todo                       |
+| 7   | Stack-limit field silently ignores empty/`0` input                                                                    | UX              | Low      | 🔴 Todo                       |
+| 8   | `inserter_icons` local shadowing                                                                                      | Minor           | Low      | 🔴 Todo                       |
+| 9   | `local prototypes` shadows Factorio global                                                                            | Minor           | Low      | 🔴 Todo                       |
+| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764 | UX              | Low      | 🔴 Todo                       |
 
 ---
 
@@ -38,7 +39,7 @@ _Last updated: 2026-07-06_
 - **Fix:** Likely swap to input=`east`, output=`west` — **confirm in-game before changing.**
 
 ### 3. Duplicate function definitions shadow the correct version
-- **Status:** 🔴 Todo
+- **Status:** 🟢 Done
 - **Location:** `control.lua:936 & 994` (`get_researched_item_filters`), `control.lua:955 & 1021` (`check_and_clear_incompatible_cursor_recipe`)
 - **Problem:** Each function is defined twice; the second silently shadows the first. The surviving `check_and_clear_incompatible_cursor_recipe` no longer strips `request_filters`/`logistic_sections`, so after moving to an incompatible surface the recipe clears but the requester chest keeps requesting ingredients.
 - **Fix:** Delete the dead first copies; keep the intended behavior for cursor-clearing (decide whether request filters should also be cleared).
