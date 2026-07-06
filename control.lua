@@ -1232,7 +1232,7 @@ local function build_gui(player)
     options.inserter_selection = options.inserters.names[1]
   end
   -- Update inserter buttons state
-  local inserter_icons = find_child_by_name(frame, GUI_INSERTER_FLOW)
+  inserter_icons = find_child_by_name(frame, GUI_INSERTER_FLOW)
   if inserter_icons then
     for _, child in pairs(inserter_icons.children) do
       if child and child.valid and child.name:find(GUI_INSERTER_PREFIX, 1, true) == 1 then
