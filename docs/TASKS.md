@@ -9,18 +9,20 @@ _Last updated: 2026-07-06_
 
 ## Summary
 
-| #   | Item                                                                                                                  | Type            | Severity | Status                        |
-| --- | --------------------------------------------------------------------------------------------------------------------- | --------------- | -------- | ----------------------------- |
-| 1   | `is_fluid` undefined in `handle_create_click`                                                                         | Bug             | High     | 🟢 Done                       |
-| 2   | Inserter directions appear swapped                                                                                    | Not a bug       | —        | ⚪ Won't Do (verified correct) |
-| 3   | Duplicate function definitions shadow correct version                                                                 | Bug             | Medium   | 🟢 Done                       |
-| 4   | Dead `quick_mall_requests` tag-application path                                                                       | Bug (dead code) | Low      | 🟢 Done                       |
-| 5   | `build_building_options` re-scans all prototypes per item change                                                      | Optimization    | Medium   | 🟢 Done                       |
-| 6   | Redundant recipe scans in `build_gui`                                                                                 | Optimization    | Low      | 🟢 Done                       |
-| 7   | Stack-limit field silently ignores empty/`0` input                                                                    | UX              | Low      | 🟢 Done                       |
-| 8   | `inserter_icons` local shadowing                                                                                      | Minor           | Low      | 🟢 Done                       |
-| 9   | `local prototypes` shadows Factorio global                                                                            | Minor           | Low      | 🟢 Done                       |
-| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764 | UX              | Low      | 🔴 Todo                       |
+| #   | Item                                                                                                                                      | Type            | Severity | Status                        |
+| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------- | ----------------------------- |
+| 1   | `is_fluid` undefined in `handle_create_click`                                                                                             | Bug             | High     | 🟢 Done                       |
+| 2   | Inserter directions appear swapped                                                                                                        | Not a bug       | —        | ⚪ Won't Do (verified correct) |
+| 3   | Duplicate function definitions shadow correct version                                                                                     | Bug             | Medium   | 🟢 Done                       |
+| 4   | Dead `quick_mall_requests` tag-application path                                                                                           | Bug (dead code) | Low      | 🟢 Done                       |
+| 5   | `build_building_options` re-scans all prototypes per item change                                                                          | Optimization    | Medium   | 🟢 Done                       |
+| 6   | Redundant recipe scans in `build_gui`                                                                                                     | Optimization    | Low      | 🟢 Done                       |
+| 7   | Stack-limit field silently ignores empty/`0` input                                                                                        | UX              | Low      | 🟢 Done                       |
+| 8   | `inserter_icons` local shadowing                                                                                                          | Minor           | Low      | 🟢 Done                       |
+| 9   | `local prototypes` shadows Factorio global                                                                                                | Minor           | Low      | 🟢 Done                       |
+| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764                     | UX              | Low      | 🟢 Done                       |
+| 11  | Document the code                                                                                                                         | Optimization    | Low      | 🔴 Todo                       |
+| 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc | Optimization    | Medium   | 🔴 Todo                       |
 
 ---
 
@@ -83,6 +85,12 @@ _Last updated: 2026-07-06_
 - **Status:** 🟢 Done
 - **Location:** `control.lua:537`
 - **Problem:** Safe today but fragile; rename the local.
+
+### 10. GUI window too tall — bottom "Build" button gets cut off
+- **Status:** 🟢 Done
+- **Location:** `control.lua` `build_gui`
+- **Problem:** The task title ("entity overflow error") is misleading. The linked mod-portal discussion is a GUI sizing issue: in a heavily-modded game the building/recipe/chest/inserter icon lists make the window grow taller than the screen, cutting off the "Build Quick Mall" button (`GUI_CREATE`). A user at 75% UI scale could not reach it.
+- **Fix:** Wrapped the middle selection rows in a `scroll-pane` with `maximum_height = 500` so the content scrolls instead of growing the window, and moved `button_flow` (with `GUI_CREATE`) directly onto `frame` after the scroll-pane so the Build button is always visible. No element names changed; `find_child_by_name` still resolves everything (it recurses). See `docs/workitems/10-gui-overflow-scrollpane.md`. Needs in-game spot-check (🔵).
 
 ---
 

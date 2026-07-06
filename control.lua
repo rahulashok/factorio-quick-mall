@@ -1104,7 +1104,18 @@ local function build_gui(player)
     sprite = "utility/close",
   })
 
-  local content = frame.add({ type = "flow", direction = "vertical" })
+  -- Wrap the selection rows in a scroll-pane so a heavily-modded game (with
+  -- dozens of building/recipe/chest icons) cannot grow the window taller than
+  -- the screen. The titlebar (above) and the Build button (below) stay outside
+  -- this scroll-pane so the Build button is always visible/reachable.
+  local scroll_pane = frame.add({
+    type = "scroll-pane",
+    horizontal_scroll_policy = "never",
+    vertical_scroll_policy = "auto",
+  })
+  scroll_pane.style.maximum_height = 500
+
+  local content = scroll_pane.add({ type = "flow", direction = "vertical" })
   content.style.padding = 12
   content.style.vertical_spacing = 8
 
@@ -1203,8 +1214,12 @@ local function build_gui(player)
   warning_label.style.single_line = false
   warning_label.visible = false
 
-  local button_flow = content.add({ type = "flow", direction = "horizontal" })
+  -- Add the Build button directly to the frame (outside the scroll-pane) so it
+  -- is always visible below the scrollable content, regardless of icon count.
+  local button_flow = frame.add({ type = "flow", direction = "horizontal" })
   button_flow.style.horizontal_align = "right"
+  button_flow.style.horizontally_stretchable = true
+  button_flow.style.padding = 12
   button_flow.add({
     type = "button",
     name = GUI_CREATE,
