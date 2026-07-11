@@ -1,4 +1,17 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.2.0
+Date: 2026-07-11
+  Bugfixes:
+    - Fixed undefined is_fluid check in the build path so fluid recipes reset quality to normal
+    - Removed duplicate function definitions that shadowed the intended request-clearing behavior
+    - Removed a dead ghost-tag request path that never executed
+  Changes:
+    - Split control.lua into focused scripts/ modules (constants, prototypes, storage, recipes, blueprint, gui)
+    - Documented the codebase with a file header and per-function comments
+  Minor Features:
+    - Wrapped the selection rows in a scroll pane so the Build button is always reachable on small screens
+    - Stack-limit field now treats empty or 0 input as "no limit" instead of silently keeping the old value
+---------------------------------------------------------------------------------------------------
 Version: 1.1.0
 Date: 2026-01-25
   Changes:

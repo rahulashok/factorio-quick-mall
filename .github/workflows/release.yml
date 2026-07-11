@@ -1,0 +1,49 @@
+name: Release to Factorio Mod Portal
+
+# Push a tag like `v1.2.0` to build the mod zip and publish it to the portal.
+# The tag MUST match the version in info.json (guard below fails otherwise).
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write # attach the zip to a GitHub Release
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Resolve version and verify tag matches info.json
+        id: ver
+        run: |
+          version="$(python3 -c "import json;print(json.load(open('info.json'))['version'])")"
+          tag="${GITHUB_REF_NAME#v}"
+          echo "info.json version: ${version}"
+          echo "git tag:           ${GITHUB_REF_NAME} (-> ${tag})"
+          if [ "${version}" != "${tag}" ]; then
+            echo "::error::Tag ${GITHUB_REF_NAME} does not match info.json version ${version}. Bump info.json or retag."
+            exit 1
+          fi
+          echo "version=${version}" >> "${GITHUB_OUTPUT}"
+          echo "zip=quick-mall_${version}.zip" >> "${GITHUB_OUTPUT}"
+
+      - name: Build release zip
+        run: ./scripts/build_release.sh
+
+      - name: Publish to Factorio Mod Portal
+        uses: mchangrh/factorio-mod-upload@v2
+        with:
+          mod-name: quick-mall
+        env:
+          FACTORIO_MODS_TOKEN: ${{ secrets.FACTORIO_TOKEN }}
+          FILENAME: ${{ steps.ver.outputs.zip }}
+
+      - name: Attach zip to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ${{ steps.ver.outputs.zip }}
+          fail_on_unmatched_files: true
