@@ -374,3 +374,19 @@ remote.add_interface("quick_mall", {
     end
   end
 })
+
+-- === Automated in-game tests (FactorioTest) ===
+--
+-- When the optional `factorio-test` mod is active (dev / CI only — see the
+-- "? factorio-test" dependency in info.json), register the FactorioTest runner
+-- and load our spec files. This is inert in normal play: the block is skipped
+-- unless the player/CI has installed factorio-test. The CLI
+-- (`scripts/run_tests.sh`) launches Factorio headless with factorio-test enabled,
+-- which auto-runs these specs and reports pass/fail. The specs exercise the REAL
+-- scripts/* modules (unlike the legacy `tests` remote above, which runs a
+-- mock-only harness). See docs/workitems/13-automated-test-schedule.md.
+if script.active_mods["factorio-test"] then
+  -- load_luassert = true swaps the global `assert` for luassert, giving the spec
+  -- rich matchers (assert.is_true / assert.equals / assert.is_nil / ...).
+  require("__factorio-test__/init")({ "tests.qm-blueprint-tests" }, { load_luassert = true })
+end

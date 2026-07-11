@@ -5,24 +5,25 @@ Update the **Status** column as work progresses.
 
 **Status legend:** 🔴 Todo · 🟡 In Progress · 🟢 Done · ⚪ Won't Do · 🔵 Needs In-Game Verification
 
-_Last updated: 2026-07-06_
+_Last updated: 2026-07-11_
 
 ## Summary
 
-| #   | Item                                                                                                                                      | Type            | Severity | Status                        |
-| --- | ----------------------------------------------------------------------------------------------------------------------------------------- | --------------- | -------- | ----------------------------- |
-| 1   | `is_fluid` undefined in `handle_create_click`                                                                                             | Bug             | High     | 🟢 Done                       |
-| 2   | Inserter directions appear swapped                                                                                                        | Not a bug       | —        | ⚪ Won't Do (verified correct) |
-| 3   | Duplicate function definitions shadow correct version                                                                                     | Bug             | Medium   | 🟢 Done                       |
-| 4   | Dead `quick_mall_requests` tag-application path                                                                                           | Bug (dead code) | Low      | 🟢 Done                       |
-| 5   | `build_building_options` re-scans all prototypes per item change                                                                          | Optimization    | Medium   | 🟢 Done                       |
-| 6   | Redundant recipe scans in `build_gui`                                                                                                     | Optimization    | Low      | 🟢 Done                       |
-| 7   | Stack-limit field silently ignores empty/`0` input                                                                                        | UX              | Low      | 🟢 Done                       |
-| 8   | `inserter_icons` local shadowing                                                                                                          | Minor           | Low      | 🟢 Done                       |
-| 9   | `local prototypes` shadows Factorio global                                                                                                | Minor           | Low      | 🟢 Done                       |
-| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764                     | UX              | Low      | 🟢 Done                       |
-| 11  | Document the code                                                                                                                         | Optimization    | Low      | 🟢 Done                       |
-| 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc | Optimization    | Medium   | 🟢 Done                       |
+| #   | Item                                                                                                                                                                                                                         | Type                 | Severity | Status                        |
+| --- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------- | -------- | ----------------------------- |
+| 1   | `is_fluid` undefined in `handle_create_click`                                                                                                                                                                                | Bug                  | High     | 🟢 Done                       |
+| 2   | Inserter directions appear swapped                                                                                                                                                                                           | Not a bug            | —        | ⚪ Won't Do (verified correct) |
+| 3   | Duplicate function definitions shadow correct version                                                                                                                                                                        | Bug                  | Medium   | 🟢 Done                       |
+| 4   | Dead `quick_mall_requests` tag-application path                                                                                                                                                                              | Bug (dead code)      | Low      | 🟢 Done                       |
+| 5   | `build_building_options` re-scans all prototypes per item change                                                                                                                                                             | Optimization         | Medium   | 🟢 Done                       |
+| 6   | Redundant recipe scans in `build_gui`                                                                                                                                                                                        | Optimization         | Low      | 🟢 Done                       |
+| 7   | Stack-limit field silently ignores empty/`0` input                                                                                                                                                                           | UX                   | Low      | 🟢 Done                       |
+| 8   | `inserter_icons` local shadowing                                                                                                                                                                                             | Minor                | Low      | 🟢 Done                       |
+| 9   | `local prototypes` shadows Factorio global                                                                                                                                                                                   | Minor                | Low      | 🟢 Done                       |
+| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764                                                                                                        | UX                   | Low      | 🟢 Done                       |
+| 11  | Document the code                                                                                                                                                                                                            | Optimization         | Low      | 🟢 Done                       |
+| 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc                                                                                    | Optimization         | Medium   | 🟢 Done                       |
+| 13  | Run automated tests (including unit tests, integration tests, system tests, simulation tests, etc) every 6 hours and report on the results as a part of this doc. Include test coverage rate (lines, methods, files covered) | Platform Improvement | Medium   | 🟢 Done                       |
 
 ---
 
@@ -124,6 +125,60 @@ _Last updated: 2026-07-06_
 - **Problem:** The task title ("entity overflow error") is misleading. The linked mod-portal discussion is a GUI sizing issue: in a heavily-modded game the building/recipe/chest/inserter icon lists make the window grow taller than the screen, cutting off the "Build Quick Mall" button (`GUI_CREATE`). A user at 75% UI scale could not reach it.
 - **Fix:** Wrapped the middle selection rows in a `scroll-pane` with `maximal_height = 500` so the content scrolls instead of growing the window, and moved `button_flow` (with `GUI_CREATE`) directly onto `frame` after the scroll-pane so the Build button is always visible. No element names changed; `find_child_by_name` still resolves everything (it recurses). See `docs/workitems/10-gui-overflow-scrollpane.md`.
 - **Runtime fix (2026-07-06):** Initial version used `maximum_height`, an invalid LuaStyle key that crashed on GUI open (`LuaStyle doesn't contain key maximum_height`, `scripts/gui.lua:368`). Corrected to `maximal_height`. `luac -p` could not catch this — the key is only rejected by the game at runtime.
+
+---
+
+## Platform Improvements
+
+### 13. Automated tests every 6 hours + coverage reporting
+- **Status:** 🟢 Done — 🔵 **first scheduled fire should be observed once** (the on-demand run passes; the recurring launch depends on the machine being awake with the REPL idle at the fire time).
+- **Location:** `info.json`, `control.lua` (FactorioTest init hook), new `tests/qm-blueprint-tests.lua`, `factorio-test.json`, `scripts/run_tests.sh`, `docs/test-results/latest.md`.
+- **Problem:** The repo's only tests lived in `tests.lua`, a mock-only harness whose
+  cases **re-implement the logic inline** ("we define the logic here as it was
+  implemented") and never `require` `control.lua`/`scripts/*.lua`. They therefore
+  exercised none of the shipped code, ran only manually in-game via
+  `remote.call("quick_mall","run_tests")`, and produced no scheduled run and no
+  coverage figures.
+- **Fix:** Adopted **FactorioTest** (GlassBricks; the maintained successor to
+  Testorio) as an optional dependency (`? factorio-test`). `control.lua` registers
+  it — guarded by `script.active_mods["factorio-test"]` so it is inert in normal
+  play — and loads a new spec `tests/qm-blueprint-tests.lua` that drives the **real**
+  `scripts/recipes.lua` and `scripts/blueprint.lua` inside a live headless Factorio.
+  `scripts/run_tests.sh` launches Factorio headless through the `factorio-test-cli`
+  (`npx`), writes `docs/test-results/latest.md`, and exits non-zero on failure. A
+  **Claude Code scheduled job** (durable, in `.claude/scheduled_tasks.json`, every 6
+  hours) runs it — deliberately **not** the system crontab. Current run: **8/8 pass**.
+  See `docs/workitems/13-automated-test-schedule.md` and the results section below.
+
+---
+
+## Automated Test Results
+
+_Latest run: 2026-07-11 · refreshed every 6 hours by the Claude Code scheduled job
+"Quick Mall automated test run" (durable, `.claude/scheduled_tasks.json`), which
+executes `scripts/run_tests.sh`. The full/raw report is regenerated at
+`docs/test-results/latest.md` each run._
+
+- **Runner:** FactorioTest CLI (`npx factorio-test-cli run`), headless Factorio 2.0.77 (Steam), factorio-test mod 3.0.1.
+- **Result:** ✅ **8 passed, 0 failed** (8 total).
+- **Spec:** `tests/qm-blueprint-tests.lua` — exercises the real source modules (no mocks).
+
+### Coverage rate
+
+Factorio runs mods in its own VM and there is **no in-VM line-coverage tool**
+(luacov cannot instrument the running game), so a line-percentage cannot be
+measured honestly. Reported instead is **functional coverage** — which real files
+and functions the suite actually drives:
+
+| Metric | Covered | Notes |
+| --- | --- | --- |
+| **Files** | 2 of 6 `scripts/*` modules (`recipes.lua`, `blueprint.lua`) directly exercised; `constants.lua` + `prototypes.lua` loaded transitively | `gui.lua` / `storage.lua` need a player/GUI harness — future work. |
+| **Methods** | 5 real functions asserted: `recipes.has_solid_inputs`, `recipes.has_solid_outputs`, `recipes.get_recipes_for_item`, `blueprint.build_blueprint_entities`, `blueprint.get_item_requests` | Called against real base-game recipes on a live surface. |
+| **Lines** | Not measurable in the Factorio VM | Stated honestly rather than fabricated; would require a luacov-capable harness outside the game. |
+
+> Note: the previous `tests.lua` harness reported "3/3 passed" but covered **0** of
+> the real source lines/functions (it tested inline copies of the logic). The figures
+> above are the first that reflect the shipped code.
 
 ---
 
