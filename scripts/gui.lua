@@ -350,8 +350,17 @@ local function render_module_buttons(frame, options, force)
   options.module_selections = options.module_selections or {}
   for slot = 1, slot_count do
     local saved = options.module_selections[slot]
-    -- Drop a saved selection that is no longer allowed for this combo.
-    if saved and not allowed_set[saved] then
+    -- Normalize the saved value's module NAME (backward compat: it may be a legacy
+    -- bare string OR the new { name, quality } table from workitem-15).
+    local saved_name
+    if type(saved) == "table" then
+      saved_name = saved.name
+    elseif type(saved) == "string" then
+      saved_name = saved
+    end
+    -- Drop a saved selection whose module is no longer allowed for this combo.
+    -- allowed_set is keyed by module NAME (quality does not affect allow-ness).
+    if saved and (not saved_name or not allowed_set[saved_name]) then
       saved = nil
       options.module_selections[slot] = nil
     end
@@ -359,12 +368,20 @@ local function render_module_buttons(frame, options, force)
     local button = module_icons.add({
       type = "choose-elem-button",
       name = GUI_MODULE_PREFIX .. slot,
-      elem_type = "item",
+      -- Quality-aware picker (workitem-15): elem_value is a PrototypeWithQuality
+      -- table { name, quality }. The name allow-list below still applies (quality
+      -- is orthogonal to the item filter).
+      elem_type = "item-with-quality",
       elem_filters = elem_filters,
       tooltip = "Choose a module for slot " .. slot .. ".",
     })
     if saved then
-      button.elem_value = saved
+      if type(saved) == "table" then
+        button.elem_value = { name = saved.name, quality = saved.quality or "normal" }
+      else
+        -- Legacy bare string: seed name only (quality defaults to normal in-game).
+        button.elem_value = { name = saved }
+      end
     end
   end
 end
@@ -764,6 +781,8 @@ local function handle_create_click(player)
   -- Module support (workitem-14): gather the per-slot module names, capped at the
   -- building's real slot count and filtered to those still allowed for the final
   -- recipe (so a stale selection from a different recipe/building is dropped).
+  -- Each slot selection is normalized to a { name, quality } table (workitem-15).
+  -- allowed_set is name-keyed (quality is orthogonal to allow-ness).
   local module_selections = {}
   local slot_count = get_module_slot_count(building_prototype)
   if slot_count > 0 and options.module_selections then
@@ -772,9 +791,16 @@ local function handle_create_click(player)
       allowed_set[name] = true
     end
     for slot = 1, slot_count do
-      local module_name = options.module_selections[slot]
-      if module_name and allowed_set[module_name] then
-        module_selections[slot] = module_name
+      local saved = options.module_selections[slot]
+      -- Backward compat: tolerate a legacy bare string OR the new table.
+      local sel
+      if type(saved) == "table" and saved.name then
+        sel = { name = saved.name, quality = saved.quality or "normal" }
+      elseif type(saved) == "string" then
+        sel = { name = saved, quality = "normal" }
+      end
+      if sel and allowed_set[sel.name] then
+        module_selections[slot] = sel
       end
     end
   end

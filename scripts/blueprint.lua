@@ -72,8 +72,10 @@ end
 --   - an output chest (with an optional `bar` = stack_limit) + an extracting
 --     inserter (only when an output chest / inserter is chosen).
 -- chest_offset / inserter_offset are horizontal offsets to the west of the
--- building. module_selections is a nil-safe slot-indexed array of module item
--- names. Each entity gets a sequential entity_number. Returns the entity list.
+-- building. module_selections is a nil-safe slot-indexed array of per-slot module
+-- selections; each entry is a { name, quality } table (a bare string is tolerated
+-- for backward compat, treated as quality "normal"). Each entity gets a sequential
+-- entity_number. Returns the entity list.
 local function build_blueprint_entities(
   base_position,
   building_name,
@@ -93,19 +95,36 @@ local function build_blueprint_entities(
   local quality_name = quality or "normal"
   local bar_value = (stack_limit and stack_limit > 0) and stack_limit or nil
 
-  -- Module support (workitem-14): module_selections is a slot-indexed array of
-  -- module item names (nils allowed for empty slots). Collapse it into
-  --   module_counts[name] = number of slots assigned to that module
-  -- and a compact slot list (in original order) so we can (a) build a logistic
-  -- request on the building so bots deliver the modules, and (b) pre-fill the
-  -- building's module inventory in the blueprint entity `items` field.
+  -- Module support (workitem-14/15): module_selections is a slot-indexed array of
+  -- per-slot selections. Each entry is a { name, quality } table (workitem-15);
+  -- for backward compat a bare string is treated as { name = s, quality = "normal" }.
+  -- Nils are allowed for empty slots. Collapse into
+  --   module_counts[key] = { name, quality, count }  keyed by "name@quality"
+  -- and a compact slot list (in original order, each { name, quality }) so we can
+  -- (a) build a logistic request on the building so bots deliver the modules, and
+  -- (b) pre-fill the building's module inventory in the blueprint entity `items`.
   local module_counts = {}
-  local module_slot_names = {}
+  local module_slots = {}
   if module_selections then
-    for _, module_name in ipairs(module_selections) do
-      if module_name and module_name ~= "" then
-        module_counts[module_name] = (module_counts[module_name] or 0) + 1
-        table.insert(module_slot_names, module_name)
+    for _, sel in ipairs(module_selections) do
+      -- Normalize each entry to (name, quality); nil-safe + backward-compatible.
+      local mname, mquality
+      if type(sel) == "table" then
+        mname = sel.name
+        mquality = sel.quality or "normal"
+      elseif type(sel) == "string" then
+        mname = sel
+        mquality = "normal"
+      end
+      if mname and mname ~= "" then
+        local key = mname .. "@" .. mquality
+        local bucket = module_counts[key]
+        if not bucket then
+          bucket = { name = mname, quality = mquality, count = 0 }
+          module_counts[key] = bucket
+        end
+        bucket.count = bucket.count + 1
+        table.insert(module_slots, { name = mname, quality = mquality })
       end
     end
   end
@@ -147,14 +166,15 @@ local function build_blueprint_entities(
     -- (a) Logistic request on the BUILDING so bots deliver the modules from the
     -- network (this is the primary requirement). Same request_filters shape used
     -- for the input chest below.
+    -- One filter per distinct (name, quality) pair, emitting the REAL quality.
     local module_filters = {}
     local module_index = 1
-    for module_name, count in pairs(module_counts) do
+    for _, bucket in pairs(module_counts) do
       module_filters[module_index] = {
         index = module_index,
-        name = module_name,
-        count = count,
-        quality = "normal",
+        name = bucket.name,
+        count = bucket.count,
+        quality = bucket.quality,
         comparator = "=",
       }
       module_index = module_index + 1
@@ -169,7 +189,12 @@ local function build_blueprint_entities(
     }
 
     -- Record the modules in tags too (informational; not relied on for delivery).
-    building_def.tags.quick_mall_modules = table.concat(module_slot_names, ",")
+    -- Join "name:quality" per slot (workitem-15) so quality is captured too.
+    local slot_tags = {}
+    for _, slot in ipairs(module_slots) do
+      table.insert(slot_tags, slot.name .. ":" .. slot.quality)
+    end
+    building_def.tags.quick_mall_modules = table.concat(slot_tags, ",")
 
     -- (b) Complementary: pre-fill the building's module inventory in the blueprint
     -- `items` field so the ghost visually shows which modules belong in which
@@ -182,24 +207,26 @@ local function build_blueprint_entities(
         and defines.inventory.assembling_machine_modules
       if module_inventory then
         local items = {}
-        -- Group the InventoryPositions per module name (stacks are 0-based).
-        local positions_by_name = {}
-        for slot_index, module_name in ipairs(module_slot_names) do
-          local list = positions_by_name[module_name]
-          if not list then
-            list = {}
-            positions_by_name[module_name] = list
+        -- Group the InventoryPositions per (name, quality) pair (stacks 0-based),
+        -- so each slot's module carries ITS OWN quality into the insert-plan id.
+        local groups = {}
+        for slot_index, slot in ipairs(module_slots) do
+          local key = slot.name .. "@" .. slot.quality
+          local group = groups[key]
+          if not group then
+            group = { name = slot.name, quality = slot.quality, positions = {} }
+            groups[key] = group
           end
-          table.insert(list, {
+          table.insert(group.positions, {
             inventory = module_inventory,
             stack = slot_index - 1,
             count = 1,
           })
         end
-        for module_name, positions in pairs(positions_by_name) do
+        for _, group in pairs(groups) do
           table.insert(items, {
-            id = { name = module_name, quality = "normal" },
-            items = { in_inventory = positions },
+            id = { name = group.name, quality = group.quality },
+            items = { in_inventory = group.positions },
           })
         end
         if #items > 0 then

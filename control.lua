@@ -297,9 +297,10 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
     gui.refresh_recipe_buttons(player, name_to_refresh)
   elseif event.element and event.element.valid
     and event.element.name:find(constants.GUI_MODULE_PREFIX, 1, true) == 1 then
-    -- Module choose-elem-button changed (workitem-14): record the per-slot module
-    -- name (nil when cleared) in options.module_selections. No re-render is needed
-    -- (the button already shows the new icon); it is read at build time.
+    -- Module choose-elem-button changed (workitem-14/15): record the per-slot
+    -- module { name, quality } (nil when cleared) in options.module_selections. No
+    -- re-render is needed (the button already shows the new icon); it is read at
+    -- build time.
     local storage = storage_mod.get_storage_root()
     local options = storage and storage.options[player.index]
     if not options then
@@ -310,12 +311,17 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
     if slot then
       options.module_selections = options.module_selections or {}
       local value = event.element.elem_value
-      -- choose-elem-button elem_value for elem_type "item" is the item name
-      -- string (or a table with .name for quality-aware pickers); normalize.
+      -- Quality-aware picker (workitem-15): elem_value is a PrototypeWithQuality
+      -- table { name, quality }. Preserve the quality instead of discarding it.
       if type(value) == "table" then
-        value = value.name
+        options.module_selections[slot] = { name = value.name, quality = value.quality or "normal" }
+      elseif type(value) == "string" then
+        -- Defensive: a plain-item picker would yield a bare string.
+        options.module_selections[slot] = { name = value, quality = "normal" }
+      else
+        -- Cleared.
+        options.module_selections[slot] = nil
       end
-      options.module_selections[slot] = value
     end
   end
 end)

@@ -252,4 +252,117 @@ describe("blueprint module (real source)", function()
     -- electronic-circuit needs iron-plate + copper-cable (both solid).
     assert.is_true(#reqs >= 1)
   end)
+
+  -- workitem-15: a per-slot module at a NON-normal quality must thread that quality
+  -- through to both the building's logistic request_filters AND the items insert-plan.
+  it("per-slot module quality flows into request_filters + items id", function()
+    -- Discover a real quality prototype whose name is not "normal". If the base
+    -- install has none (quality mod disabled), skip gracefully.
+    local function find_non_normal_quality()
+      local sources = {}
+      pcall(function() if prototypes and prototypes.quality then sources[#sources + 1] = prototypes.quality end end)
+      pcall(function() if game and game.quality_prototypes then sources[#sources + 1] = game.quality_prototypes end end)
+      for _, src in ipairs(sources) do
+        for name in pairs(src) do
+          if type(name) == "string" and name ~= "normal" then
+            return name
+          end
+        end
+      end
+      return nil
+    end
+
+    -- Discover a real module item, same approach as the module-restriction test.
+    local function item_prototypes()
+      local ok, res = pcall(function() return game.item_prototypes end)
+      if ok and res then return res end
+      if prototypes and prototypes.item then return prototypes.item end
+      return {}
+    end
+    local function find_module()
+      for name, proto in pairs(item_prototypes()) do
+        local effects
+        pcall(function() effects = proto.module_effects end)
+        if effects and next(effects) then return name end
+        if type(name) == "string" and name:find("%-module") then return name end
+      end
+      return nil
+    end
+
+    -- A building with module slots, discovered via the real recipes module.
+    local function entity_prototypes()
+      local ok, res = pcall(function() return game.entity_prototypes end)
+      if ok and res then return res end
+      if prototypes and prototypes.entity then return prototypes.entity end
+      return {}
+    end
+    local function find_building_with_slots()
+      local all = entity_prototypes()
+      for _, candidate in ipairs({ "assembling-machine-3", "assembling-machine-2" }) do
+        local proto = all[candidate]
+        if proto and recipes.get_module_slot_count(proto) > 0 then
+          return candidate
+        end
+      end
+      return nil
+    end
+
+    local quality = find_non_normal_quality()
+    if not quality then
+      log("SKIP module-quality test: no non-normal quality prototype in this install")
+      return
+    end
+    local module_name = find_module()
+    if not module_name then
+      log("SKIP module-quality test: no module item found")
+      return
+    end
+    local building_name = find_building_with_slots()
+    if not building_name then
+      log("SKIP module-quality test: no building with module slots")
+      return
+    end
+
+    local entities = blueprint.build_blueprint_entities(
+      base,
+      building_name,
+      SOLID_RECIPE,
+      nil, nil, "fast-inserter",
+      2, 1,
+      {}, -- empty request list
+      "normal",
+      0,
+      { { name = module_name, quality = quality } } -- one non-normal-quality module in slot 1
+    )
+
+    local building = entities[1]
+    assert.equals(building_name, building.name)
+
+    -- (a) request_filters carries the chosen quality for the module.
+    assert.is_truthy(building.request_filters)
+    local filters = building.request_filters.sections[1].filters
+    local filter_match
+    for _, f in pairs(filters) do
+      if f.name == module_name and f.quality == quality then
+        filter_match = f
+      end
+    end
+    assert.is_truthy(filter_match)
+    assert.equals(quality, filter_match.quality)
+
+    -- (b) items insert-plan id carries the chosen quality (guarded: only present
+    -- when defines.inventory.assembling_machine_modules resolved).
+    if building.items then
+      local item_match
+      for _, entry in pairs(building.items) do
+        if entry.id and entry.id.name == module_name and entry.id.quality == quality then
+          item_match = entry
+        end
+      end
+      assert.is_truthy(item_match)
+      assert.equals(quality, item_match.id.quality)
+    else
+      log("NOTE module-quality test: building.items absent (module inventory constant unresolved)")
+    end
+  end)
 end)

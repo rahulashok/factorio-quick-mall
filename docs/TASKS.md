@@ -25,6 +25,7 @@ _Last updated: 2026-07-13_
 | 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc                                                                                    | Optimization         | Medium   | 🟢 Done                       |
 | 13  | Run automated tests (including unit tests, integration tests, system tests, simulation tests, etc) every 6 hours and report on the results as a part of this doc. Include test coverage rate (lines, methods, files covered) | Platform Improvement | Medium   | 🟢 Done                       |
 | 14  | Add support for modules.                                                                                                                                                                                                     | New Feature          | Medium   | 🔵 Needs In-Game Verification |
+| 15  | Module picker: allow selecting module quality (higher-quality modules)                                                                                                                                                       | New Feature          | Medium   | 🔵 Needs In-Game Verification |
 
 ---
 
@@ -190,6 +191,33 @@ _Last updated: 2026-07-13_
   "module restrictions (real source)" test in `tests/qm-blueprint-tests.lua`. `luac -p`
   passes; still needs in-game re-verification. See
   `docs/workitems/14-add-support-for-modules.md`.
+
+### 15. Module picker: allow selecting module quality
+- **Status:** 🔵 Needs In-Game Verification
+- **Location:** `scripts/gui.lua` (`render_module_buttons`, `handle_create_click`),
+  `control.lua` (`on_gui_elem_changed` module branch), `scripts/blueprint.lua`
+  (`build_blueprint_entities`), `tests/qm-blueprint-tests.lua`.
+- **Need:** Workitem 14 added a per-slot module picker but only at **normal** quality.
+  Users could not request an uncommon/rare/etc. module. Add per-slot quality selection
+  and thread the chosen quality through to the blueprint's logistic request and the
+  module-inventory insert-plan.
+- **Fix:** Switched the per-slot `choose-elem-button` from `elem_type = "item"` (bare
+  string value) to `elem_type = "item-with-quality"` (value is a `PrototypeWithQuality`
+  table `{ name, quality }`), keeping the existing name allow-list `elem_filters`
+  unchanged. `on_gui_elem_changed` now stores `{ name, quality }` per slot instead of
+  discarding quality. `build_blueprint_entities` collapses selections by a composite
+  `name@quality` key so it emits **one logistic request filter per distinct
+  (name, quality) pair with the real quality**, and groups the module-inventory
+  `InventoryPosition`s by (name, quality) so each slot's `items` insert-plan `id`
+  carries its own quality. The `quick_mall_modules` tag now joins `name:quality` per
+  slot. All reads of `module_selections[slot]` tolerate BOTH a legacy bare string and
+  the new table (backward compat with any persisted state). Added a blueprint test that
+  discovers a non-normal quality prototype at runtime (skips gracefully if none) and
+  asserts the chosen quality appears in both `request_filters` and the `items` id.
+  `luac -p` passes on all edited files. **Needs in-game verification** — see
+  `docs/workitems/15-module-quality-selection.md`. The main open question is whether
+  the `{ filter = "name", ... }` allow-list is accepted on an `item-with-quality`
+  picker at runtime (documented as the item filter, but only confirmable in-game).
 
 ---
 
