@@ -27,6 +27,7 @@ _Last updated: 2026-07-13_
 | 14  | Add support for modules.                                                                                                                                                                                                     | New Feature          | Medium   | 🟢 Done                       |
 | 15  | Module picker: allow selecting module quality (higher-quality modules)                                                                                                                                                       | New Feature          | Medium   | 🟢 Done                       |
 | 16  | Fix: independent module slots (don't stop at first empty slot) + crash on opening GUI with a removed/stale item                                                                                                               | Bug                  | High     | 🟢 Done                       |
+| 17  | UI window width should be constant (currently expands/contracts to the longest row)                                                                                                                                          | UX                   | Low      | 🔵 Needs In-Game Verification |
 
 ---
 
@@ -170,6 +171,12 @@ _Last updated: 2026-07-13_
 - **Fix (vertical, prior):** Wrapped the middle selection rows in a `scroll-pane` with `maximal_height = 500` and moved the Build button onto `frame` after the scroll-pane so it stays visible.
 - **Runtime fix (2026-07-06):** Initial version used `maximum_height`, an invalid LuaStyle key that crashed on GUI open. Corrected to `maximal_height`.
 - **Fix (horizontal, 2026-07-13):** Every icon container (`GUI_BUILDING_FLOW`, `GUI_RECIPE_FLOW`, `GUI_INPUT_FLOW`, `GUI_OUTPUT_FLOW`, `GUI_INSERTER_FLOW`) is now a `table` with `column_count = 10` so icons wrap into a grid, and each table is nested inside a bounded per-row `scroll-pane` (`maximal_height` ≈ 3 rows) so a very long list scrolls in place instead of overflowing. Element names are unchanged (only the type flipped from `flow` to `table`), so all `find_child_by_name` lookups and the `on_gui_click` handlers resolve unchanged — no `control.lua` edits needed. Chose the nested-scroll approach over a native `choose-elem-button` picker because `RecipePrototypeFilter` has no recipe-name allow-list (so a native recipe chooser couldn't be constrained to the valid recipes). See `docs/workitems/10-gui-overflow-scrollpane.md`.
+
+### 17. UI window width should be constant
+- **Status:** 🔵 Needs In-Game Verification
+- **Location:** `scripts/gui.lua` `build_gui`, `scripts/constants.lua`
+- **Problem:** The window had no fixed width, so the `frame`/`content` sized to the widest row on each render. As selections changed (different labels / icon counts), the window visibly expanded and contracted, which felt janky.
+- **Fix:** Added `GUI_CONTENT_WIDTH` (sized to hold a full `GUI_ICON_COLUMNS`-wide icon row) and pinned the `content` flow to it via `minimal_width == maximal_width`, so the window width is constant regardless of row contents. The icon rows already wrap/scroll within their bounded per-row scroll-panes (workitem-10), so nothing overflows the fixed width. See `docs/workitems/17-constant-window-width.md`.
 
 ---
 

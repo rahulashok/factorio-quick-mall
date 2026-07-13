@@ -35,6 +35,7 @@ local GUI_MODULE_PREFIX = constants.GUI_MODULE_PREFIX
 local GUI_ICON_COLUMNS = constants.GUI_ICON_COLUMNS
 local GUI_MAX_INLINE_ROWS = constants.GUI_MAX_INLINE_ROWS
 local GUI_OVERFLOW_SCROLL_HEIGHT = constants.GUI_OVERFLOW_SCROLL_HEIGHT
+local GUI_CONTENT_WIDTH = constants.GUI_CONTENT_WIDTH
 local INPUT_CHEST_CANDIDATES = constants.INPUT_CHEST_CANDIDATES
 local OUTPUT_CHEST_CANDIDATES = constants.OUTPUT_CHEST_CANDIDATES
 local INSERTER_CANDIDATES = constants.INSERTER_CANDIDATES
@@ -485,6 +486,11 @@ local function build_gui(player)
   local content = scroll_pane.add({ type = "flow", direction = "vertical" })
   content.style.padding = 12
   content.style.vertical_spacing = 8
+  -- Pin a fixed content width (workitem-17) so the window no longer grows/shrinks
+  -- to fit the longest row. Setting min == max keeps it constant regardless of
+  -- which rows are longest; it is sized to hold a full icon row (see constant).
+  content.style.minimal_width = GUI_CONTENT_WIDTH
+  content.style.maximal_width = GUI_CONTENT_WIDTH
 
   local item_flow = content.add({ type = "flow", direction = "horizontal" })
   item_flow.style.vertical_align = "center"

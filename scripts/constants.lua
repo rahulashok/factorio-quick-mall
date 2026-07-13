@@ -42,6 +42,12 @@ local GUI_MAX_INLINE_ROWS = 3
 -- table to this height and shows a vertical scrollbar past the inline limit.
 local GUI_OVERFLOW_SCROLL_HEIGHT = 3 * 40 + 8
 
+-- Fixed content width (workitem-17) so the window no longer expands/contracts to
+-- fit the longest row. Sized to comfortably hold a full row of GUI_ICON_COLUMNS
+-- (10) 40px slot buttons plus row label and padding, so a full icon row still fits
+-- without horizontal scrolling. Applied as both min and max width on the content.
+local GUI_CONTENT_WIDTH = 10 * 40 + 60
+
 -- === Candidate option tables ===
 -- Fallback/ordering hints. Each entry is { name, label, aliases? }. `name` is the
 -- preferred prototype name; `aliases` list alternate prototype names to try when
@@ -139,6 +145,7 @@ return {
   GUI_ICON_COLUMNS = GUI_ICON_COLUMNS,
   GUI_MAX_INLINE_ROWS = GUI_MAX_INLINE_ROWS,
   GUI_OVERFLOW_SCROLL_HEIGHT = GUI_OVERFLOW_SCROLL_HEIGHT,
+  GUI_CONTENT_WIDTH = GUI_CONTENT_WIDTH,
   STATIC_BUILDING_CANDIDATES = STATIC_BUILDING_CANDIDATES,
   INPUT_CHEST_CANDIDATES = INPUT_CHEST_CANDIDATES,
   OUTPUT_CHEST_CANDIDATES = OUTPUT_CHEST_CANDIDATES,
