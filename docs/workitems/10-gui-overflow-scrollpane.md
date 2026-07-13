@@ -107,6 +107,9 @@ This is a layout change to a live GUI; it should be spot-checked in-game to
 confirm the scrollbar appears with a long list and the Build button stays
 visible. Cannot be verified from static analysis alone.
 
+## User feedback
+In-game testing failed. When there are a lot of entities it places them all in a single row in the UI and it extends horizontally beyond the UI's boundary. We need a better way to handle this.  if the number of entities is too long then it should show up in multiple rows up to some sort of limit. beyond that limit it needs to then instead use a separate dialog window similar to when we are choosing what item to craft and show the list of entities within that 
+
 ## How to undo just this workitem
 Committed as a single commit tagged `workitem-10`.
 ```bash

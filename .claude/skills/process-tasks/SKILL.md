@@ -1,6 +1,6 @@
 ---
 name: process-tasks
-description: Process the docs/TASKS.md work-item tracker — find 🔴 Todo rows, implement each via parallel worktree subagents, write a detailed workitem report with a revert plan, flip status to Done, and commit. Invoke on the 15-minute schedule or manually with /process-tasks.
+description: Process the docs/TASKS.md work-item tracker — find open (🔴) rows, implement each via worktree subagents, write a detailed workitem report with a revert plan, flip status to Done, and commit. Invoke on the 15-minute schedule or manually with /process-tasks.
 ---
 
 # Process Quick Mall tasks
@@ -11,18 +11,41 @@ the source-of-truth procedure for working it. The durable cron job and manual
 
 ## 1. Scan for actionable work
 
-Read `docs/TASKS.md`. Find every row whose **Status is `🔴 Todo`** in the summary
-table (lines like `| 14 | ... | 🔴 Todo |`). Ignore the status *legend* line and any
-row already marked `🟢 Done`, `⚪ Won't Do`, `🟡 In Progress`, or `🔵`.
+Read `docs/TASKS.md` and parse the **summary table** — the numbered rows that look
+like `| 14 | <item> | <type> | <severity> | <status> |`.
 
-**If there are no 🔴 Todo rows, do nothing and stop.** This is the normal case.
+**A row is OPEN (actionable) if its Status cell contains the 🔴 emoji.** Match on the
+**🔴 emoji itself, not on exact text.** The status wording is authored by a human and
+varies — e.g. `🔴 Todo`, `🔴 TODO`, `🔴 TODO: Reopened`, `🔴 In Progress (reopened)`
+have all appeared. Treat ANY numbered table row whose Status cell contains 🔴 as open.
+Do **not** rely on a case-sensitive string like `🔴 Todo`.
 
-## 2. Implement each Todo item (in parallel)
+A concrete way to list open rows (the leading `| N |` filter excludes the legend
+line, which is not a numbered table row):
 
-Dispatch one subagent per Todo workitem. Run independent items **in parallel**, each
-in its own **git worktree** (`isolation: "worktree"`) — `control.lua` was split into
-`scripts/*.lua` modules (workitem #12), so concurrent edits rarely collide. Only
-serialize workitems that provably touch the same lines.
+```bash
+grep -nE '^\| *[0-9]+ ' docs/TASKS.md | grep '🔴'
+```
+
+Ignore the status *legend* line (line ~6) and any row whose Status cell has no 🔴
+(i.e. 🟢 Done, ⚪ Won't Do, 🟡 without 🔴, or 🔵). A **reopened** item (🔴 plus text
+like "Reopened") is open — read its detail section AND its `docs/workitems/NN-*.md`
+report, which may contain new failure information ("User feedback" / "In-game testing
+failed") explaining why the prior fix was insufficient. Use that to drive the new fix.
+
+**If no numbered row contains 🔴, do nothing and stop.** This is the normal case.
+
+## 2. Implement each open item (worktree subagents)
+
+Dispatch one subagent per open workitem, each in its own **git worktree**
+(`isolation: "worktree"`). `control.lua` was split into `scripts/*.lua` modules
+(workitem #12), so items touching *different* modules can run **in parallel**.
+
+**Before fanning out, check for file overlap.** If two open items would edit the same
+file/function (e.g. both restructure `scripts/gui.lua`'s `build_gui`), do NOT run them
+concurrently — the worktree merges will conflict. Instead **serialize** them: run the
+first, merge it to the main branch, then branch the second on top of the merged result
+and re-read the now-current file. When in doubt about overlap, serialize.
 
 Each subagent, for its workitem `NN`, must:
 
