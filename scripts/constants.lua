@@ -26,6 +26,17 @@ local GUI_QUALITY_WARNING = "quick-mall-quality-warning"
 local GUI_CREATE = "quick-mall-create"
 local GUI_CLOSE = "quick-mall-close"
 
+-- Icon-row layout limits (workitem-10). Icon containers are `table`s that wrap
+-- their sprite-buttons into rows of GUI_ICON_COLUMNS. When a row would need more
+-- than GUI_MAX_INLINE_ROWS rows, the render_* helpers wrap the table in a bounded
+-- scroll-pane (GUI_OVERFLOW_SCROLL_HEIGHT tall) so a very long list scrolls in
+-- place instead of extending past the window edge.
+local GUI_ICON_COLUMNS = 10
+local GUI_MAX_INLINE_ROWS = 3
+-- ~3 rows of 40px slot buttons plus inter-row spacing; the scroll-pane clamps the
+-- table to this height and shows a vertical scrollbar past the inline limit.
+local GUI_OVERFLOW_SCROLL_HEIGHT = 3 * 40 + 8
+
 -- === Candidate option tables ===
 -- Fallback/ordering hints. Each entry is { name, label, aliases? }. `name` is the
 -- preferred prototype name; `aliases` list alternate prototype names to try when
@@ -118,6 +129,9 @@ return {
   GUI_QUALITY_WARNING = GUI_QUALITY_WARNING,
   GUI_CREATE = GUI_CREATE,
   GUI_CLOSE = GUI_CLOSE,
+  GUI_ICON_COLUMNS = GUI_ICON_COLUMNS,
+  GUI_MAX_INLINE_ROWS = GUI_MAX_INLINE_ROWS,
+  GUI_OVERFLOW_SCROLL_HEIGHT = GUI_OVERFLOW_SCROLL_HEIGHT,
   STATIC_BUILDING_CANDIDATES = STATIC_BUILDING_CANDIDATES,
   INPUT_CHEST_CANDIDATES = INPUT_CHEST_CANDIDATES,
   OUTPUT_CHEST_CANDIDATES = OUTPUT_CHEST_CANDIDATES,

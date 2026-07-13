@@ -30,6 +30,9 @@ local GUI_OUTPUT_PREFIX = constants.GUI_OUTPUT_PREFIX
 local GUI_QUALITY_WARNING = constants.GUI_QUALITY_WARNING
 local GUI_CREATE = constants.GUI_CREATE
 local GUI_CLOSE = constants.GUI_CLOSE
+local GUI_ICON_COLUMNS = constants.GUI_ICON_COLUMNS
+local GUI_MAX_INLINE_ROWS = constants.GUI_MAX_INLINE_ROWS
+local GUI_OVERFLOW_SCROLL_HEIGHT = constants.GUI_OVERFLOW_SCROLL_HEIGHT
 local INPUT_CHEST_CANDIDATES = constants.INPUT_CHEST_CANDIDATES
 local OUTPUT_CHEST_CANDIDATES = constants.OUTPUT_CHEST_CANDIDATES
 local INSERTER_CANDIDATES = constants.INSERTER_CANDIDATES
@@ -86,6 +89,38 @@ local function is_valid_selection(selection, list)
     if name == selection then return true end
   end
   return false
+end
+
+-- Adds one icon row to `parent`: a heading label plus a wrapping `table`
+-- (column_count = GUI_ICON_COLUMNS) named `table_name`, so its sprite-buttons
+-- wrap into multiple rows instead of a single horizontal line (workitem-10 fix
+-- for horizontal overflow). The table is nested inside a `scroll-pane` whose
+-- `maximal_height` caps the visible height at ~GUI_MAX_INLINE_ROWS rows: short
+-- lists render at their natural size, and only a very long list (past the inline
+-- limit) triggers a vertical scrollbar so the row cannot grow the window
+-- unbounded. The returned table is looked up later by `find_child_by_name`
+-- (recursive) exactly as before — only its `type` changed from "flow" to
+-- "table", so `.clear()`/`.add()` in the render_* helpers behave identically.
+local function add_icon_row(parent, label_caption, table_name)
+  local row = parent.add({ type = "flow", direction = "horizontal" })
+  row.style.vertical_align = "center"
+  row.add({ type = "label", caption = label_caption, style = "heading_2_label" })
+
+  local scroll = row.add({
+    type = "scroll-pane",
+    horizontal_scroll_policy = "never",
+    vertical_scroll_policy = "auto",
+  })
+  scroll.style.maximal_height = GUI_OVERFLOW_SCROLL_HEIGHT
+
+  local icons = scroll.add({
+    type = "table",
+    name = table_name,
+    column_count = GUI_ICON_COLUMNS,
+  })
+  icons.style.horizontal_spacing = 4
+  icons.style.vertical_spacing = 4
+  return icons
 end
 
 -- === GUI render / refresh helpers ===
@@ -388,46 +423,13 @@ local function build_gui(player)
 
   options.is_initializing = false
 
-  local building_flow = content.add({ type = "flow", direction = "horizontal" })
-  building_flow.style.vertical_align = "center"
-  building_flow.add({ type = "label", caption = "Building: ", style = "heading_2_label" })
-  local building_icons = building_flow.add({
-    type = "table",
-    name = GUI_BUILDING_FLOW,
-    column_count = 10,
-  })
-  building_icons.style.horizontal_spacing = 4
-  building_icons.style.vertical_spacing = 4
-
-  local recipe_flow = content.add({ type = "flow", direction = "horizontal" })
-  recipe_flow.style.vertical_align = "center"
-  recipe_flow.add({ type = "label", caption = "Recipe: ", style = "heading_2_label" })
-  local recipe_icons = recipe_flow.add({
-    type = "flow",
-    name = GUI_RECIPE_FLOW,
-    direction = "horizontal",
-  })
-  recipe_icons.style.horizontal_spacing = 4
-
-  local input_flow = content.add({ type = "flow", direction = "horizontal" })
-  input_flow.style.vertical_align = "center"
-  input_flow.add({ type = "label", caption = "Input chest: ", style = "heading_2_label" })
-  local input_icons = input_flow.add({
-    type = "flow",
-    name = GUI_INPUT_FLOW,
-    direction = "horizontal",
-  })
-  input_icons.style.horizontal_spacing = 4
-
-  local output_flow = content.add({ type = "flow", direction = "horizontal" })
-  output_flow.style.vertical_align = "center"
-  output_flow.add({ type = "label", caption = "Output chest: ", style = "heading_2_label" })
-  local output_icons = output_flow.add({
-    type = "flow",
-    name = GUI_OUTPUT_FLOW,
-    direction = "horizontal",
-  })
-  output_icons.style.horizontal_spacing = 4
+  -- Each icon row is a wrapping `table` inside a bounded scroll-pane so many
+  -- candidates wrap into rows and, past ~GUI_MAX_INLINE_ROWS rows, scroll in
+  -- place rather than overflowing the window (workitem-10).
+  add_icon_row(content, "Building: ", GUI_BUILDING_FLOW)
+  add_icon_row(content, "Recipe: ", GUI_RECIPE_FLOW)
+  add_icon_row(content, "Input chest: ", GUI_INPUT_FLOW)
+  add_icon_row(content, "Output chest: ", GUI_OUTPUT_FLOW)
 
   local stack_limit_flow = content.add({
     type = "flow",
@@ -436,15 +438,7 @@ local function build_gui(player)
   })
   stack_limit_flow.style.vertical_align = "center"
 
-  local inserter_flow = content.add({ type = "flow", direction = "horizontal" })
-  inserter_flow.style.vertical_align = "center"
-  inserter_flow.add({ type = "label", caption = "Inserter: ", style = "heading_2_label" })
-  local inserter_icons = inserter_flow.add({
-    type = "flow",
-    name = GUI_INSERTER_FLOW,
-    direction = "horizontal",
-  })
-  inserter_icons.style.horizontal_spacing = 4
+  local inserter_icons = add_icon_row(content, "Inserter: ", GUI_INSERTER_FLOW)
 
   for _, inserter_name in ipairs(options.inserters.names) do
     local button = inserter_icons.add({

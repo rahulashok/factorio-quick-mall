@@ -5,7 +5,7 @@ Update the **Status** column as work progresses.
 
 **Status legend:** 🔴 Todo · 🟡 In Progress · 🟢 Done · ⚪ Won't Do · 🔵 Needs In-Game Verification
 
-_Last updated: 2026-07-11_
+_Last updated: 2026-07-13_
 
 ## Summary
 
@@ -20,7 +20,7 @@ _Last updated: 2026-07-11_
 | 7   | Stack-limit field silently ignores empty/`0` input                                                                                                                                                                           | UX                   | Low      | 🟢 Done                       |
 | 8   | `inserter_icons` local shadowing                                                                                                                                                                                             | Minor                | Low      | 🟢 Done                       |
 | 9   | `local prototypes` shadows Factorio global                                                                                                                                                                                   | Minor                | Low      | 🟢 Done                       |
-| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764 <br>The fix did not work. More info in the workitems md file.                                          | UX                   | Low      | 🔴 TODO: Reopened             |
+| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764 <br>Reopened: horizontal overflow. Fixed by wrapping icon rows into a grid + bounded per-row scroll-pane. | UX                   | Low      | 🔵 Needs In-Game Verification |
 | 11  | Document the code                                                                                                                                                                                                            | Optimization         | Low      | 🟢 Done                       |
 | 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc                                                                                    | Optimization         | Medium   | 🟢 Done                       |
 | 13  | Run automated tests (including unit tests, integration tests, system tests, simulation tests, etc) every 6 hours and report on the results as a part of this doc. Include test coverage rate (lines, methods, files covered) | Platform Improvement | Medium   | 🟢 Done                       |
@@ -120,12 +120,13 @@ _Last updated: 2026-07-11_
 - **Location:** `control.lua:537`
 - **Problem:** Safe today but fragile; rename the local.
 
-### 10. GUI window too tall — bottom "Build" button gets cut off
-- **Status:** 🟢 Done
-- **Location:** `control.lua` `build_gui`
-- **Problem:** The task title ("entity overflow error") is misleading. The linked mod-portal discussion is a GUI sizing issue: in a heavily-modded game the building/recipe/chest/inserter icon lists make the window grow taller than the screen, cutting off the "Build Quick Mall" button (`GUI_CREATE`). A user at 75% UI scale could not reach it.
-- **Fix:** Wrapped the middle selection rows in a `scroll-pane` with `maximal_height = 500` so the content scrolls instead of growing the window, and moved `button_flow` (with `GUI_CREATE`) directly onto `frame` after the scroll-pane so the Build button is always visible. No element names changed; `find_child_by_name` still resolves everything (it recurses). See `docs/workitems/10-gui-overflow-scrollpane.md`.
-- **Runtime fix (2026-07-06):** Initial version used `maximum_height`, an invalid LuaStyle key that crashed on GUI open (`LuaStyle doesn't contain key maximum_height`, `scripts/gui.lua:368`). Corrected to `maximal_height`. `luac -p` could not catch this — the key is only rejected by the game at runtime.
+### 10. GUI window overflow (vertical, then horizontal)
+- **Status:** 🔵 Needs In-Game Verification
+- **Location:** `scripts/gui.lua` `build_gui` (+ new constants in `scripts/constants.lua`)
+- **Problem:** The task title ("entity overflow error") is misleading. The linked mod-portal discussion is a GUI sizing issue: in a heavily-modded game the building/recipe/chest/inserter icon lists make the window grow beyond the screen. The first pass fixed **vertical** growth (outer `scroll-pane`), but the in-game retest revealed **horizontal** overflow: the Recipe/Input/Output/Inserter rows were horizontal `flow`s (which never wrap), so many icons extended past the right window edge.
+- **Fix (vertical, prior):** Wrapped the middle selection rows in a `scroll-pane` with `maximal_height = 500` and moved the Build button onto `frame` after the scroll-pane so it stays visible.
+- **Runtime fix (2026-07-06):** Initial version used `maximum_height`, an invalid LuaStyle key that crashed on GUI open. Corrected to `maximal_height`.
+- **Fix (horizontal, 2026-07-13):** Every icon container (`GUI_BUILDING_FLOW`, `GUI_RECIPE_FLOW`, `GUI_INPUT_FLOW`, `GUI_OUTPUT_FLOW`, `GUI_INSERTER_FLOW`) is now a `table` with `column_count = 10` so icons wrap into a grid, and each table is nested inside a bounded per-row `scroll-pane` (`maximal_height` ≈ 3 rows) so a very long list scrolls in place instead of overflowing. Element names are unchanged (only the type flipped from `flow` to `table`), so all `find_child_by_name` lookups and the `on_gui_click` handlers resolve unchanged — no `control.lua` edits needed. Chose the nested-scroll approach over a native `choose-elem-button` picker because `RecipePrototypeFilter` has no recipe-name allow-list (so a native recipe chooser couldn't be constrained to the valid recipes). See `docs/workitems/10-gui-overflow-scrollpane.md`.
 
 ---
 
