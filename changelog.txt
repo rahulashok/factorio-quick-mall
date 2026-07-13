@@ -1,4 +1,18 @@
 ---------------------------------------------------------------------------------------------------
+Version: 1.3.0
+Date: 2026-07-13
+  Features:
+    - Module support: choose modules per slot for the crafting building, filtered to those
+      allowed for the selected recipe and building; the built entity requests the modules
+      from the logistics network
+    - Module quality selection: pick the quality of each module (e.g. uncommon/rare), carried
+      through to the logistic request and the module inventory
+  Bugfixes:
+    - Module picker no longer offers modules a recipe forbids (e.g. productivity modules on
+      end-product recipes like inserters or belts)
+    - Fixed horizontal GUI overflow: building/recipe/chest/inserter icon rows now wrap into a
+      grid and scroll in place instead of extending past the window edge
+---------------------------------------------------------------------------------------------------
 Version: 1.2.0
 Date: 2026-07-11
   Bugfixes:
