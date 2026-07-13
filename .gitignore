@@ -11,5 +11,12 @@ factorio-test-data-dir/
 .claude/scheduled_tasks.lock
 .claude/settings.local.json
 
+# Obsidian per-machine editor UI state (docs/ is an Obsidian vault)
+docs/.obsidian/workspace.json
+
+# Test results are refreshed every run by scripts/run_tests.sh; the initial copy
+# was committed, routine refreshes are left as local working-tree changes.
+docs/test-results/latest.md
+
 # OS
 .DS_Store

@@ -20,12 +20,12 @@ _Last updated: 2026-07-13_
 | 7   | Stack-limit field silently ignores empty/`0` input                                                                                                                                                                           | UX                   | Low      | 🟢 Done                       |
 | 8   | `inserter_icons` local shadowing                                                                                                                                                                                             | Minor                | Low      | 🟢 Done                       |
 | 9   | `local prototypes` shadows Factorio global                                                                                                                                                                                   | Minor                | Low      | 🟢 Done                       |
-| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764 <br>Reopened: horizontal overflow. Fixed by wrapping icon rows into a grid + bounded per-row scroll-pane. | UX                   | Low      | 🔵 Needs In-Game Verification |
+| 10  | Fix entity overflow error reported here: https://mods.factorio.com/mod/quick-mall/discussion/6a3c1ca62e6b3d3dc9466764 <br>Reopened: horizontal overflow. Fixed by wrapping icon rows into a grid + bounded per-row scroll-pane. | UX                   | Low      | 🟢 Done                       |
 | 11  | Document the code                                                                                                                                                                                                            | Optimization         | Low      | 🟢 Done                       |
 | 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc                                                                                    | Optimization         | Medium   | 🟢 Done                       |
 | 13  | Run automated tests (including unit tests, integration tests, system tests, simulation tests, etc) every 6 hours and report on the results as a part of this doc. Include test coverage rate (lines, methods, files covered) | Platform Improvement | Medium   | 🟢 Done                       |
-| 14  | Add support for modules.                                                                                                                                                                                                     | New Feature          | Medium   | 🔵 Needs In-Game Verification |
-| 15  | Module picker: allow selecting module quality (higher-quality modules)                                                                                                                                                       | New Feature          | Medium   | 🔵 Needs In-Game Verification |
+| 14  | Add support for modules.                                                                                                                                                                                                     | New Feature          | Medium   | 🟢 Done                       |
+| 15  | Module picker: allow selecting module quality (higher-quality modules)                                                                                                                                                       | New Feature          | Medium   | 🟢 Done                       |
 
 ---
 
@@ -122,7 +122,7 @@ _Last updated: 2026-07-13_
 - **Problem:** Safe today but fragile; rename the local.
 
 ### 10. GUI window overflow (vertical, then horizontal)
-- **Status:** 🔵 Needs In-Game Verification
+- **Status:** 🟢 Done — verified in-game 2026-07-13 (icon rows wrap into a grid and scroll in place; no horizontal overflow; Build button stays visible).
 - **Location:** `scripts/gui.lua` `build_gui` (+ new constants in `scripts/constants.lua`)
 - **Problem:** The task title ("entity overflow error") is misleading. The linked mod-portal discussion is a GUI sizing issue: in a heavily-modded game the building/recipe/chest/inserter icon lists make the window grow beyond the screen. The first pass fixed **vertical** growth (outer `scroll-pane`), but the in-game retest revealed **horizontal** overflow: the Recipe/Input/Output/Inserter rows were horizontal `flow`s (which never wrap), so many icons extended past the right window edge.
 - **Fix (vertical, prior):** Wrapped the middle selection rows in a `scroll-pane` with `maximal_height = 500` and moved the Build button onto `frame` after the scroll-pane so it stays visible.
@@ -158,7 +158,7 @@ _Last updated: 2026-07-13_
 ## New Features
 
 ### 14. Add support for modules
-- **Status:** 🔵 Needs In-Game Verification
+- **Status:** 🟢 Done — verified in-game 2026-07-13 (module picker shows correct slots, allowed-module filtering works incl. recipe restrictions, and modules are requested/delivered).
 - **Location:** `scripts/constants.lua`, `scripts/recipes.lua`, `scripts/blueprint.lua`, `scripts/gui.lua`, `control.lua`.
 - **Need:** Let the player choose modules for the crafting building, respecting the
   building's module-slot count and which modules are allowed for the building+recipe
@@ -193,7 +193,7 @@ _Last updated: 2026-07-13_
   `docs/workitems/14-add-support-for-modules.md`.
 
 ### 15. Module picker: allow selecting module quality
-- **Status:** 🔵 Needs In-Game Verification
+- **Status:** 🟢 Done — verified in-game 2026-07-13 (per-slot quality selection flows into the module request and inventory).
 - **Location:** `scripts/gui.lua` (`render_module_buttons`, `handle_create_click`),
   `control.lua` (`on_gui_elem_changed` module branch), `scripts/blueprint.lua`
   (`build_blueprint_entities`), `tests/qm-blueprint-tests.lua`.
