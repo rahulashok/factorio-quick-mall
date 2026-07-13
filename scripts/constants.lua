@@ -43,10 +43,15 @@ local GUI_MAX_INLINE_ROWS = 3
 local GUI_OVERFLOW_SCROLL_HEIGHT = 3 * 40 + 8
 
 -- Fixed content width (workitem-17) so the window no longer expands/contracts to
--- fit the longest row. Sized to comfortably hold a full row of GUI_ICON_COLUMNS
--- (10) 40px slot buttons plus row label and padding, so a full icon row still fits
--- without horizontal scrolling. Applied as both min and max width on the content.
-local GUI_CONTENT_WIDTH = 10 * 40 + 60
+-- fit the longest row. It MUST be wide enough to show a full row of
+-- GUI_ICON_COLUMNS icons without clipping, because the per-row scroll-pane uses
+-- horizontal_scroll_policy = "never" (so anything past the edge is cut off, not
+-- scrollable). Budget = the icon table (columns * 40px slot + inter-column 4px
+-- spacing) + the row's heading label + content padding + a vertical-scrollbar
+-- reserve. Applied as a minimal_width FLOOR only (not a max cap): the window is
+-- effectively constant because no row exceeds it, and if this estimate is ever a
+-- touch low it grows rather than clipping content.
+local GUI_CONTENT_WIDTH = GUI_ICON_COLUMNS * 40 + (GUI_ICON_COLUMNS - 1) * 4 + 200
 
 -- === Candidate option tables ===
 -- Fallback/ordering hints. Each entry is { name, label, aliases? }. `name` is the

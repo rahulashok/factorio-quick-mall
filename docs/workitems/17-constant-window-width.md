@@ -37,17 +37,29 @@ content.style.maximal_width = GUI_CONTENT_WIDTH
 ```
 
 ## How it was solved
-Setting `minimal_width == maximal_width` on the `content` flow removes the "size to
-widest child" behavior, so the window is a constant width no matter which row is longest.
-The width is derived from `GUI_ICON_COLUMNS` (a full 10-wide icon row) plus label/padding
-room, so a full icon row still fits without horizontal scrolling. This composes with the
-workitem-10 fix: the per-row icon tables already wrap into a grid and scroll vertically
-within bounded per-row scroll-panes, so no row can overflow the fixed width horizontally.
+Pin the `content` flow with a `minimal_width` FLOOR (not a min==max cap). This removes the
+"size to widest child" jank — no row exceeds the floor, so the window looks constant — while
+guaranteeing content is never cut off.
 
-Alternatives considered: sizing the width dynamically to the current longest row (rejected —
-that is the janky behavior we are removing) and setting width on the `frame` instead of
-`content` (rejected — the titlebar/Build-button live on the frame and pinning `content` is
-the least intrusive point that governs the selection rows). `luac -p` passes on both files.
+**Correction (2026-07-13):** the first attempt used `minimal_width == maximal_width = 10*40+60`
+(≈460px). That was wrong on two counts and clipped the last ~2 icon columns:
+1. **Too narrow.** Each icon row is laid out horizontally as `[heading label] [scroll-pane
+   holding the 10-column table]`. The table alone is `10*40 + 9*4 = 436px`; add the ~120px
+   heading label + content padding and 460px left far too little for the table.
+2. **A max cap clips.** The per-row scroll-pane uses `horizontal_scroll_policy = "never"`, so
+   whatever doesn't fit is cut off (not scrollable). A `maximal_width` cap therefore *hides*
+   the last columns instead of showing them.
+
+The fix: `GUI_CONTENT_WIDTH = GUI_ICON_COLUMNS*40 + (GUI_ICON_COLUMNS-1)*4 + 200` (= 636px for
+10 columns) — full icon table + label + padding + scrollbar reserve — applied as
+`minimal_width` only. Because it's a floor, if the estimate is ever slightly low the window
+GROWS rather than clipping, which satisfies "must definitely show all contents." The width is
+derived from `GUI_ICON_COLUMNS` so it stays correct if the column count changes.
+
+Alternatives considered: sizing dynamically to the longest row (rejected — that is the jank
+being removed); pinning the `frame` instead of `content` (rejected — titlebar/Build-button
+live on the frame; `content` is the least intrusive point governing the selection rows).
+`luac -p` passes on both files.
 
 ## How to undo just this workitem
 Committed as a single commit tagged `workitem-17`.

@@ -486,11 +486,13 @@ local function build_gui(player)
   local content = scroll_pane.add({ type = "flow", direction = "vertical" })
   content.style.padding = 12
   content.style.vertical_spacing = 8
-  -- Pin a fixed content width (workitem-17) so the window no longer grows/shrinks
-  -- to fit the longest row. Setting min == max keeps it constant regardless of
-  -- which rows are longest; it is sized to hold a full icon row (see constant).
+  -- Fix the content width (workitem-17) so the window no longer visibly grows and
+  -- shrinks to fit the longest row. Use a minimal_width FLOOR only — deliberately
+  -- NOT a maximal_width cap: a cap would CLIP a full icon row (the per-row
+  -- scroll-pane has horizontal_scroll_policy = "never", so overflow is cut off, not
+  -- scrollable). With a floor, no row exceeds the width so it looks constant, and if
+  -- the estimate is ever slightly low the window grows instead of hiding content.
   content.style.minimal_width = GUI_CONTENT_WIDTH
-  content.style.maximal_width = GUI_CONTENT_WIDTH
 
   local item_flow = content.add({ type = "flow", direction = "horizontal" })
   item_flow.style.vertical_align = "center"
