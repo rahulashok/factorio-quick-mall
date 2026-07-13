@@ -323,8 +323,16 @@ end
 --      not expose it, allow.
 --   3. If the building exposes `allowed_effects`, at least one of the module's
 --      effects must be permitted (when determinable). If not determinable, allow.
+--   4. If the RECIPE exposes `allowed_effects` (via recipe.prototype.allowed_effects,
+--      fallback recipe.allowed_effects) and it is non-empty, EVERY effect the module
+--      produces must be permitted (`== true`). A module introducing any disallowed
+--      effect is rejected. This enforces Factorio 2.0's "productivity only on
+--      intermediate recipes" rule (end-product recipes lack allowed_effects.productivity).
+--   5. If the RECIPE exposes `allowed_module_categories` (via recipe.prototype, fallback
+--      recipe.*) and it is non-empty, the module's `.category` must be permitted.
 -- All prototype fields are read via pcall; the default is permissive-but-safe
--- EXCEPT the non-empty limitations list, which is respected strictly.
+-- EXCEPT the non-empty limitations list and the recipe restrictions (4)/(5), which
+-- are respected strictly when explicitly present and non-empty.
 local function is_module_allowed(module_item_prototype, building_prototype, recipe)
   if not module_item_prototype then return false end
 
@@ -386,6 +394,55 @@ local function is_module_allowed(module_item_prototype, building_prototype, reci
         if not any_allowed then
           return false
         end
+      end
+    end
+  end
+
+  if recipe then
+    -- (4) recipe-level allowed_effects: static data lives on recipe.prototype.
+    -- A module must NOT introduce any effect the recipe disallows (stricter than
+    -- the building's "at least one allowed" rule). Blocks e.g. productivity
+    -- modules on inserter/belt recipes whose allowed_effects.productivity ~= true.
+    local recipe_allowed_effects = nil
+    pcall(function()
+      recipe_allowed_effects = recipe.prototype.allowed_effects
+    end)
+    if recipe_allowed_effects == nil then
+      pcall(function()
+        recipe_allowed_effects = recipe.allowed_effects
+      end)
+    end
+    if recipe_allowed_effects and next(recipe_allowed_effects) ~= nil then
+      local effects = nil
+      pcall(function()
+        effects = module_item_prototype.module_effects
+      end)
+      if effects and next(effects) ~= nil then
+        for effect_name, _ in pairs(effects) do
+          if recipe_allowed_effects[effect_name] ~= true then
+            return false
+          end
+        end
+      end
+    end
+
+    -- (5) recipe-level allowed_module_categories (static on recipe.prototype).
+    local recipe_allowed_categories = nil
+    pcall(function()
+      recipe_allowed_categories = recipe.prototype.allowed_module_categories
+    end)
+    if recipe_allowed_categories == nil then
+      pcall(function()
+        recipe_allowed_categories = recipe.allowed_module_categories
+      end)
+    end
+    if recipe_allowed_categories and next(recipe_allowed_categories) ~= nil then
+      local category = nil
+      pcall(function()
+        category = module_item_prototype.category
+      end)
+      if category and recipe_allowed_categories[category] ~= true then
+        return false
       end
     end
   end

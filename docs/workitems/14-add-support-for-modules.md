@@ -150,3 +150,54 @@ No manual steps required. The change is additive (new constants, functions, one 
 row, one blueprint parameter); reverting removes the module row and the module
 request/inventory from new blueprints. Existing blueprints already in save games are
 unaffected (the module request lives in the blueprint entity data, not in code).
+
+## Follow-up fix (2026-07-13): recipe-level module restrictions
+
+**What was wrong (found in-game):** The module picker offered modules that the
+selected *recipe* forbids — most visibly **productivity modules on end-product
+recipes** like `inserter` / `transport-belt`. Factorio 2.0 blocks productivity
+modules on non-intermediate recipes, but Quick Mall's UI still listed them, so the
+selection was silently invalid at build time.
+
+**Root cause:** `is_module_allowed(module, building, recipe)` in `scripts/recipes.lua`
+checked (1) the module's own `.limitations`, (2) the building's
+`allowed_module_categories`, and (3) the building's `allowed_effects`, but **never
+consulted the recipe's own effect restrictions**. In 2.0 the "productivity only on
+intermediates" rule is per-recipe, exposed on the recipe prototype via
+`allowed_effects` (dictionary `[effect]→boolean`) and `allowed_module_categories`.
+Base productivity modules carry no `.limitations` in 2.0, so check (1) never caught
+them.
+
+**What changed:** Added two recipe-level checks to `is_module_allowed` (no signature
+change), read from `recipe.prototype.allowed_effects` /
+`recipe.prototype.allowed_module_categories` with a fallback to `recipe.allowed_effects`
+/ `recipe.allowed_module_categories`, all pcall-guarded and permissive when
+absent/empty:
+- **(4) recipe `allowed_effects`:** when present and non-empty, *every* effect the
+  module produces must be permitted (`== true`). A module that introduces any
+  disallowed effect is rejected. This is stricter than the building rule (3)
+  ("at least one allowed") on purpose — a productivity module on a recipe whose
+  `allowed_effects.productivity ~= true` is now rejected, while a speed/efficiency
+  module on that same recipe stays allowed if those effects are permitted.
+- **(5) recipe `allowed_module_categories`:** when present and non-empty, the module's
+  `.category` must be permitted — same shape as the existing building-category check.
+
+Both GUI call sites (`scripts/gui.lua:341` picker, `scripts/gui.lua:771` create-time
+validation) already pass the `LuaRecipe`, so both benefit with no call-site change.
+
+**New test:** Added a `"module restrictions (real source)"` group to
+`tests/qm-blueprint-tests.lua`. It discovers, at runtime from the live prototypes, a
+real productivity module, an assembler with module slots, an end-product recipe that
+forbids productivity, and an intermediate recipe that permits it (verifying which is
+which via the recipe prototype's `allowed_effects` rather than assuming), then asserts
+`is_module_allowed(...) == false` for the forbidding recipe and `== true` for the
+permitting one. Each discovery step skips gracefully (logs + passes) if a prototype is
+absent, so a modded base without productivity modules will not fail the suite.
+
+**Still needs in-game re-verification:** `luac -p` passed, but the suite could not be
+run in this environment (the downloaded `factorio-test` mod requires Factorio 2.1 while
+the installed binary is 2.0.77, so Factorio aborts at save creation before any test
+runs — this blocks all specs, not just the new one). In-game, confirm the picker no
+longer offers productivity modules for `inserter`/`transport-belt` recipes but still
+offers them for `electronic-circuit`/`iron-gear-wheel`, and that speed/efficiency
+modules remain available where permitted.

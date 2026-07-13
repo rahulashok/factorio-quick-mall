@@ -73,6 +73,122 @@ describe("recipes module (real source)", function()
   end)
 end)
 
+describe("module restrictions (real source)", function()
+  -- Resolve item prototypes the same way the mod does (game.item_prototypes with
+  -- a fallback to the 2.0 prototypes.item global).
+  local function item_prototypes()
+    local ok, res = pcall(function() return game.item_prototypes end)
+    if ok and res then return res end
+    if prototypes and prototypes.item then return prototypes.item end
+    return {}
+  end
+
+  -- Find a real module item whose module_effects include "productivity".
+  local function find_productivity_module()
+    for name, proto in pairs(item_prototypes()) do
+      local effects
+      pcall(function() effects = proto.module_effects end)
+      if effects then
+        for effect_name in pairs(effects) do
+          if effect_name == "productivity" then
+            return proto
+          end
+        end
+      end
+      -- Fallback: name-based heuristic if module_effects unreadable.
+      if not effects and type(name) == "string" and name:find("productivity%-module") then
+        return proto
+      end
+    end
+    return nil
+  end
+
+  local function entity_prototypes()
+    local ok, res = pcall(function() return game.entity_prototypes end)
+    if ok and res then return res end
+    if prototypes and prototypes.entity then return prototypes.entity end
+    return {}
+  end
+
+  -- An assembling machine (or any crafting machine) with >0 module slots.
+  local function find_assembler_with_slots()
+    local all = entity_prototypes()
+    for _, candidate in ipairs({ "assembling-machine-3", "assembling-machine-2" }) do
+      local proto = all[candidate]
+      if proto and recipes.get_module_slot_count(proto) > 0 then
+        return proto
+      end
+    end
+    -- Generic scan as a fallback.
+    for _, proto in pairs(all) do
+      if recipes.get_module_slot_count(proto) > 0 then
+        return proto
+      end
+    end
+    return nil
+  end
+
+  -- Does a recipe (LuaRecipe) permit the productivity effect? Reads static data
+  -- from recipe.prototype.allowed_effects (fallback recipe.allowed_effects).
+  local function recipe_permits_productivity(recipe)
+    if not recipe then return nil end
+    local allowed
+    pcall(function() allowed = recipe.prototype.allowed_effects end)
+    if allowed == nil then
+      pcall(function() allowed = recipe.allowed_effects end)
+    end
+    if allowed == nil or next(allowed) == nil then
+      -- No restriction expressed => productivity is permitted.
+      return true
+    end
+    return allowed.productivity == true
+  end
+
+  it("productivity module rejected on forbidding recipe, allowed on intermediate", function()
+    local force = game.forces.player
+    local prod_module = find_productivity_module()
+    if not prod_module then
+      log("SKIP module-restriction test: no productivity module in prototypes")
+      return
+    end
+    local assembler = find_assembler_with_slots()
+    if not assembler then
+      log("SKIP module-restriction test: no assembler with module slots")
+      return
+    end
+
+    -- Verify at runtime which recipe forbids vs permits productivity, rather
+    -- than assuming, so the assertion is meaningful.
+    local forbidden_recipe, allowed_recipe
+    for _, name in ipairs({ "inserter", "transport-belt" }) do
+      local r = force.recipes[name]
+      if r and recipe_permits_productivity(r) == false then
+        forbidden_recipe = r
+        break
+      end
+    end
+    for _, name in ipairs({ "electronic-circuit", "iron-gear-wheel" }) do
+      local r = force.recipes[name]
+      if r and recipe_permits_productivity(r) == true then
+        allowed_recipe = r
+        break
+      end
+    end
+
+    if not forbidden_recipe then
+      log("SKIP module-restriction test: no end-product recipe forbidding productivity found")
+      return
+    end
+    if not allowed_recipe then
+      log("SKIP module-restriction test: no intermediate recipe permitting productivity found")
+      return
+    end
+
+    assert.is_false(recipes.is_module_allowed(prod_module, assembler, forbidden_recipe))
+    assert.is_true(recipes.is_module_allowed(prod_module, assembler, allowed_recipe))
+  end)
+end)
+
 describe("blueprint module (real source)", function()
   -- Drives build_blueprint_entities exactly as handle_create_click does, then
   -- inspects the returned entity table (no game surface mutation required).

@@ -181,6 +181,15 @@ _Last updated: 2026-07-13_
   allowed-module filtering, bot delivery, 2.0 blueprint `request_filters`/`items`
   shapes on a crafting machine, and the `defines.inventory.assembling_machine_modules`
   constant).
+- **Follow-up fix (2026-07-13):** `is_module_allowed` did not check the *recipe's* own
+  effect restrictions, so the picker offered productivity modules for end-product
+  recipes (e.g. `inserter`/`transport-belt`) that Factorio forbids. Added two
+  recipe-level checks (recipe `allowed_effects` — a module may not introduce any
+  disallowed effect; recipe `allowed_module_categories`) read from
+  `recipe.prototype.*` (pcall-guarded, permissive when absent). Added a
+  "module restrictions (real source)" test in `tests/qm-blueprint-tests.lua`. `luac -p`
+  passes; still needs in-game re-verification. See
+  `docs/workitems/14-add-support-for-modules.md`.
 
 ---
 
