@@ -72,10 +72,16 @@ end
 --   - an output chest (with an optional `bar` = stack_limit) + an extracting
 --     inserter (only when an output chest / inserter is chosen).
 -- chest_offset / inserter_offset are horizontal offsets to the west of the
--- building. module_selections is a nil-safe slot-indexed array of per-slot module
--- selections; each entry is a { name, quality } table (a bare string is tolerated
--- for backward compat, treated as quality "normal"). Each entity gets a sequential
--- entity_number. Returns the entity list.
+-- building. module_selections is a DENSE list (no index gaps) of per-slot module
+-- selections (workitem-16); each entry is a { slot, name, quality } table where
+-- `slot` is the 1-based PHYSICAL module slot. Module slots are independent: any
+-- subset may be filled (including only the last slot). Backward compat: an entry
+-- may be a bare string, or a { name, quality } table WITHOUT `.slot`; for any
+-- entry lacking an explicit `.slot`, a sequential slot (running counter from 1) is
+-- assigned so older callers still work. The list is iterated with ipairs, which is
+-- safe because it is dense. The module-inventory `items` insert-plan uses each
+-- entry's `.slot - 1` (0-based physical stack) so modules land in the right slot.
+-- Each entity gets a sequential entity_number. Returns the entity list.
 local function build_blueprint_entities(
   base_position,
   building_name,
@@ -95,28 +101,41 @@ local function build_blueprint_entities(
   local quality_name = quality or "normal"
   local bar_value = (stack_limit and stack_limit > 0) and stack_limit or nil
 
-  -- Module support (workitem-14/15): module_selections is a slot-indexed array of
-  -- per-slot selections. Each entry is a { name, quality } table (workitem-15);
-  -- for backward compat a bare string is treated as { name = s, quality = "normal" }.
-  -- Nils are allowed for empty slots. Collapse into
+  -- Module support (workitem-14/15/16): module_selections is a DENSE list of
+  -- per-slot selections. Each entry is a { slot, name, quality } table (workitem-16);
+  -- for backward compat a bare string is treated as { name = s, quality = "normal" }
+  -- and a { name, quality } table WITHOUT `.slot` is tolerated too. Because the list
+  -- is dense (no gaps), ipairs iterates every entry — unlike the old sparse array
+  -- which stopped at the first empty slot and dropped all later modules (BUG 1).
+  -- Collapse into
   --   module_counts[key] = { name, quality, count }  keyed by "name@quality"
-  -- and a compact slot list (in original order, each { name, quality }) so we can
+  -- and a slot list (in order, each { slot, name, quality }) so we can
   -- (a) build a logistic request on the building so bots deliver the modules, and
-  -- (b) pre-fill the building's module inventory in the blueprint entity `items`.
+  -- (b) pre-fill the building's module inventory in the blueprint entity `items`
+  --     at each module's REAL physical slot (stack = slot - 1).
+  -- For any entry lacking an explicit `.slot`, fall back to a running counter so
+  -- old callers/state (which had no slot field) keep working.
   local module_counts = {}
   local module_slots = {}
+  local fallback_slot = 1
   if module_selections then
     for _, sel in ipairs(module_selections) do
-      -- Normalize each entry to (name, quality); nil-safe + backward-compatible.
-      local mname, mquality
+      -- Normalize each entry to (name, quality, slot); nil-safe + backward-compatible.
+      local mname, mquality, mslot
       if type(sel) == "table" then
         mname = sel.name
         mquality = sel.quality or "normal"
+        mslot = sel.slot
       elseif type(sel) == "string" then
         mname = sel
         mquality = "normal"
       end
       if mname and mname ~= "" then
+        -- Fall back to a sequential physical slot when the entry has no explicit one.
+        if type(mslot) ~= "number" then
+          mslot = fallback_slot
+        end
+        fallback_slot = fallback_slot + 1
         local key = mname .. "@" .. mquality
         local bucket = module_counts[key]
         if not bucket then
@@ -124,7 +143,7 @@ local function build_blueprint_entities(
           module_counts[key] = bucket
         end
         bucket.count = bucket.count + 1
-        table.insert(module_slots, { name = mname, quality = mquality })
+        table.insert(module_slots, { slot = mslot, name = mname, quality = mquality })
       end
     end
   end
@@ -210,16 +229,18 @@ local function build_blueprint_entities(
         -- Group the InventoryPositions per (name, quality) pair (stacks 0-based),
         -- so each slot's module carries ITS OWN quality into the insert-plan id.
         local groups = {}
-        for slot_index, slot in ipairs(module_slots) do
+        for _, slot in ipairs(module_slots) do
           local key = slot.name .. "@" .. slot.quality
           local group = groups[key]
           if not group then
             group = { name = slot.name, quality = slot.quality, positions = {} }
             groups[key] = group
           end
+          -- 0-based stack MUST be the REAL physical slot (slot.slot - 1), not the
+          -- array position, so modules land in their chosen slots (workitem-16).
           table.insert(group.positions, {
             inventory = module_inventory,
-            stack = slot_index - 1,
+            stack = slot.slot - 1,
             count = 1,
           })
         end

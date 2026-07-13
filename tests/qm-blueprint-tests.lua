@@ -365,4 +365,134 @@ describe("blueprint module (real source)", function()
       log("NOTE module-quality test: building.items absent (module inventory constant unresolved)")
     end
   end)
+
+  -- workitem-16 (BUG 1): module slots are INDEPENDENT. A dense list holding ONLY a
+  -- non-first slot (slot 2) must still emit the module: a request_filter for it AND
+  -- an items insert-plan entry whose InventoryPosition stack == 1 (slot 2 -> 0-based
+  -- stack 1). Previously a nil slot-1 hole made ipairs stop and drop everything.
+  it("a lone non-first module slot still emits the module at the right stack", function()
+    local function item_prototypes()
+      local ok, res = pcall(function() return game.item_prototypes end)
+      if ok and res then return res end
+      if prototypes and prototypes.item then return prototypes.item end
+      return {}
+    end
+    local function find_module()
+      for name, proto in pairs(item_prototypes()) do
+        local effects
+        pcall(function() effects = proto.module_effects end)
+        if effects and next(effects) then return name end
+        if type(name) == "string" and name:find("%-module") then return name end
+      end
+      return nil
+    end
+    local function entity_prototypes()
+      local ok, res = pcall(function() return game.entity_prototypes end)
+      if ok and res then return res end
+      if prototypes and prototypes.entity then return prototypes.entity end
+      return {}
+    end
+    -- A building with >= 2 module slots so slot 2 is real.
+    local function find_building_with_2_slots()
+      local all = entity_prototypes()
+      for _, candidate in ipairs({ "assembling-machine-3", "assembling-machine-2" }) do
+        local proto = all[candidate]
+        if proto and recipes.get_module_slot_count(proto) >= 2 then
+          return candidate
+        end
+      end
+      for name, proto in pairs(all) do
+        if recipes.get_module_slot_count(proto) >= 2 then
+          return name
+        end
+      end
+      return nil
+    end
+
+    local module_name = find_module()
+    if not module_name then
+      log("SKIP slot-independence test: no module item found")
+      return
+    end
+    local building_name = find_building_with_2_slots()
+    if not building_name then
+      log("SKIP slot-independence test: no building with >= 2 module slots")
+      return
+    end
+
+    local entities = blueprint.build_blueprint_entities(
+      base,
+      building_name,
+      SOLID_RECIPE,
+      nil, nil, "fast-inserter",
+      2, 1,
+      {}, -- empty request list
+      "normal",
+      0,
+      { { slot = 2, name = module_name, quality = "normal" } } -- ONLY slot 2 filled
+    )
+
+    local building = entities[1]
+    assert.equals(building_name, building.name)
+
+    -- (a) request_filter present for the module (delivery still requested).
+    assert.is_truthy(building.request_filters)
+    local filters = building.request_filters.sections[1].filters
+    local filter_match
+    for _, f in pairs(filters) do
+      if f.name == module_name then filter_match = f end
+    end
+    assert.is_truthy(filter_match)
+
+    -- (b) items insert-plan places the module at stack 1 (slot 2 -> 0-based 1).
+    if building.items then
+      local found_stack1 = false
+      for _, entry in pairs(building.items) do
+        if entry.id and entry.id.name == module_name and entry.items and entry.items.in_inventory then
+          for _, pos in pairs(entry.items.in_inventory) do
+            if pos.stack == 1 then found_stack1 = true end
+          end
+        end
+      end
+      assert.is_true(found_stack1)
+    else
+      log("NOTE slot-independence test: building.items absent (module inventory constant unresolved)")
+    end
+  end)
+end)
+
+describe("prototypes.is_valid_signal (real source)", function()
+  local prototypes_mod = require("scripts.prototypes")
+
+  -- Discover a real item name at runtime so the "valid" case is meaningful.
+  local function find_real_item()
+    for _, candidate in ipairs({ "iron-plate", "copper-plate", "wood" }) do
+      if prototypes_mod.resolve_item_prototype(candidate) then
+        return candidate
+      end
+    end
+    local ok, all = pcall(function() return game.item_prototypes end)
+    if not (ok and all) then
+      if prototypes and prototypes.item then all = prototypes.item else all = {} end
+    end
+    for name in pairs(all) do
+      if type(name) == "string" then return name end
+    end
+    return nil
+  end
+
+  it("returns false for a bogus item and true for a real one", function()
+    assert.is_false(prototypes_mod.is_valid_signal({ type = "item", name = "qm-bogus-nonexistent-item-xyz" }))
+
+    local real_item = find_real_item()
+    if not real_item then
+      log("SKIP is_valid_signal valid-item test: no item prototype found")
+      return
+    end
+    assert.is_true(prototypes_mod.is_valid_signal({ type = "item", name = real_item }))
+  end)
+
+  it("returns false for nil", function()
+    assert.is_false(prototypes_mod.is_valid_signal(nil))
+  end)
 end)

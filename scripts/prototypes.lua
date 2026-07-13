@@ -126,6 +126,107 @@ local function can_resolve_prototypes()
   return resolve_entity_prototype("inserter") ~= nil
 end
 
+-- === Signal validation (workitem-16, BUG 2) ===
+
+-- pcall-guarded lookup of a fluid prototype by name, across 2.0 (`prototypes.fluid`)
+-- and 1.1 (`game.fluid_prototypes`) APIs. Returns the prototype or nil; never throws.
+local function resolve_fluid_prototype(fluid_name)
+  if not fluid_name then return nil end
+  local ok, proto = pcall(function()
+    if prototypes and prototypes.fluid then
+      return prototypes.fluid[fluid_name]
+    end
+    return nil
+  end)
+  if ok and proto then return proto end
+  ok, proto = pcall(function()
+    if game and game.fluid_prototypes then
+      return game.fluid_prototypes[fluid_name]
+    end
+    return nil
+  end)
+  if ok and proto then return proto end
+  return nil
+end
+
+-- pcall-guarded lookup of a virtual-signal prototype by name, across 2.0
+-- (`prototypes.virtual_signal`) and 1.1 (`game.virtual_signal_prototypes`) APIs.
+-- Returns the prototype or nil; never throws.
+local function resolve_virtual_signal_prototype(signal_name)
+  if not signal_name then return nil end
+  local ok, proto = pcall(function()
+    if prototypes and prototypes.virtual_signal then
+      return prototypes.virtual_signal[signal_name]
+    end
+    return nil
+  end)
+  if ok and proto then return proto end
+  ok, proto = pcall(function()
+    if game and game.virtual_signal_prototypes then
+      return game.virtual_signal_prototypes[signal_name]
+    end
+    return nil
+  end)
+  if ok and proto then return proto end
+  return nil
+end
+
+-- Returns true if `signal` refers to a prototype that still exists, so the caller
+-- can safely assign it as a choose-elem-button elem_value (a stale reference, e.g.
+-- an item added by a since-disabled mod, otherwise crashes GUI open — BUG 2).
+--
+-- Handles: nil -> false; a legacy bare string -> validated as an item; a signal
+-- table { type, name, quality? } where:
+--   type == "item" (or nil, treated as item) -> item prototype must resolve
+--   type == "fluid"                            -> fluid prototype must resolve
+--   type == "virtual"                          -> virtual-signal prototype resolves,
+--                                                 or true if it cannot be resolved
+--                                                 (never DROP a valid virtual signal)
+--   anything else                              -> true (be permissive; only DROP
+--                                                 when we are confident it is invalid)
+-- All prototype reads are pcall-guarded; this helper never throws.
+local function is_valid_signal(signal)
+  if signal == nil then
+    return false
+  end
+
+  -- Legacy bare string: treat as an item name.
+  if type(signal) == "string" then
+    return resolve_item_prototype(signal) ~= nil
+  end
+
+  if type(signal) ~= "table" then
+    -- Unknown shape: be permissive so we only drop when confidently invalid.
+    return true
+  end
+
+  local sig_type = signal.type
+  local name = signal.name
+
+  if not name then
+    -- No name to validate against; be permissive.
+    return true
+  end
+
+  if sig_type == nil or sig_type == "item" then
+    return resolve_item_prototype(name) ~= nil
+  elseif sig_type == "fluid" then
+    return resolve_fluid_prototype(name) ~= nil
+  elseif sig_type == "virtual" then
+    -- If virtual-signal prototypes cannot be reliably resolved on this version,
+    -- keep the selection rather than dropping a valid one.
+    local proto = resolve_virtual_signal_prototype(name)
+    if proto ~= nil then
+      return true
+    end
+    -- Could not confirm; be permissive (do NOT drop).
+    return true
+  end
+
+  -- Any other/unexpected type: be permissive.
+  return true
+end
+
 -- Returns the first resolvable prototype name for a candidate: its `name`, else
 -- one of its `aliases`, else nil. Lets a candidate map to whichever naming the
 -- current game/mods use.
@@ -284,6 +385,7 @@ return {
   resolve_entity_prototype = resolve_entity_prototype,
   get_item_prototypes = get_item_prototypes,
   resolve_item_prototype = resolve_item_prototype,
+  is_valid_signal = is_valid_signal,
   can_resolve_prototypes = can_resolve_prototypes,
   resolve_candidate_name = resolve_candidate_name,
   build_option_list = build_option_list,

@@ -497,8 +497,18 @@ local function build_gui(player)
     tooltip = "Choose the item to craft.",
   })
 
+  -- workitem-16 (BUG 2): a previously-chosen item can vanish when the mod that
+  -- added it is disabled. Assigning a stale signal directly to elem_value makes
+  -- Factorio throw a non-recoverable "Unknown item name" error on GUI open. Drop
+  -- the stale selection silently (no chat message) so the picker opens empty, and
+  -- wrap the assignment in pcall as defense-in-depth against any future gap.
+  if options.item_selection and not prototypes.is_valid_signal(options.item_selection) then
+    options.item_selection = nil
+  end
   if options.item_selection then
-    item_picker.elem_value = options.item_selection
+    pcall(function()
+      item_picker.elem_value = options.item_selection
+    end)
   end
 
   options.is_initializing = false
@@ -778,11 +788,17 @@ local function handle_create_click(player)
   local inserter_offset = half_width + 1
   local chest_offset = half_width + 2
 
-  -- Module support (workitem-14): gather the per-slot module names, capped at the
-  -- building's real slot count and filtered to those still allowed for the final
-  -- recipe (so a stale selection from a different recipe/building is dropped).
-  -- Each slot selection is normalized to a { name, quality } table (workitem-15).
+  -- Module support (workitem-14/16): gather the per-slot module selections, capped
+  -- at the building's real slot count and filtered to those still allowed for the
+  -- final recipe (so a stale selection from a different recipe/building is dropped).
+  -- Each selection is normalized to a { name, quality } table (workitem-15).
   -- allowed_set is name-keyed (quality is orthogonal to allow-ness).
+  --
+  -- workitem-16 (BUG 1): build a DENSE list (no index gaps) carrying each entry's
+  -- REAL physical slot in `.slot`. Previously this was indexed by slot number, so
+  -- an empty earlier slot left a nil hole and build_blueprint_entities' ipairs()
+  -- stopped at the first nil, silently dropping every later module. A dense list
+  -- is ipairs-safe regardless of which slots are filled.
   local module_selections = {}
   local slot_count = get_module_slot_count(building_prototype)
   if slot_count > 0 and options.module_selections then
@@ -800,7 +816,13 @@ local function handle_create_click(player)
         sel = { name = saved, quality = "normal" }
       end
       if sel and allowed_set[sel.name] then
-        module_selections[slot] = sel
+        -- Append densely; carry the real slot index so the blueprint can place
+        -- the module into its correct physical inventory stack.
+        module_selections[#module_selections + 1] = {
+          slot = slot,
+          name = sel.name,
+          quality = sel.quality,
+        }
       end
     end
   end

@@ -26,6 +26,7 @@ _Last updated: 2026-07-13_
 | 13  | Run automated tests (including unit tests, integration tests, system tests, simulation tests, etc) every 6 hours and report on the results as a part of this doc. Include test coverage rate (lines, methods, files covered) | Platform Improvement | Medium   | 🟢 Done                       |
 | 14  | Add support for modules.                                                                                                                                                                                                     | New Feature          | Medium   | 🟢 Done                       |
 | 15  | Module picker: allow selecting module quality (higher-quality modules)                                                                                                                                                       | New Feature          | Medium   | 🟢 Done                       |
+| 16  | Fix: independent module slots (don't stop at first empty slot) + crash on opening GUI with a removed/stale item                                                                                                               | Bug                  | High     | 🔵 Needs In-Game Verification |
 
 ---
 
@@ -54,6 +55,47 @@ _Last updated: 2026-07-13_
 - **Location:** `control.lua:1473`
 - **Problem:** `apply_ghost_tags` handles `tags.quick_mall_requests`, but nothing ever writes that tag — requests live in the chest's `request_filters`. The `set_request_slot` block never executes. The ghost `set_recipe` re-application is also redundant since the blueprint entity already carries `recipe`.
 - **Fix:** Remove the dead branch (and redundant re-set) for clarity.
+
+### 16. Modules dropped when an earlier slot is empty + crash opening GUI with a removed item
+- **Status:** 🔵 Needs In-Game Verification
+- **Location:** `scripts/gui.lua` (`handle_create_click`, `build_gui`),
+  `scripts/blueprint.lua` (`build_blueprint_entities`),
+  `scripts/prototypes.lua` (new `is_valid_signal`), `tests/qm-blueprint-tests.lua`.
+- **Problem (BUG 1 — module drop):** `handle_create_click` built `module_selections`
+  as a **sparse** slot-indexed array (only filled slots written), so leaving slot 1
+  empty left `module_selections[1] == nil`. `build_blueprint_entities` iterated it
+  with `ipairs`, which stops at the first `nil` — so an empty earlier slot dropped
+  **all** later modules. Module slots must be independent (any subset, incl. only the
+  last slot).
+- **Problem (BUG 2 — GUI crash):** A saved `options.item_selection` was assigned
+  directly to the item picker's `elem_value` in `build_gui` without validation. When
+  the mod that added that item was later disabled, Factorio threw a non-recoverable
+  `Unknown item name: <x>` error on GUI open (`scripts/gui.lua:501`, from
+  `control.lua:127`). Other saved selections already had "drop if invalid" guards;
+  the item one did not.
+- **Fix (BUG 1):** `handle_create_click` now builds a **dense** list (no gaps) of
+  `{ slot, name, quality }` entries carrying the real physical slot. `build_blueprint_entities`
+  documents/consumes this dense-list contract, iterates with `ipairs` (safe — no
+  gaps), and uses each entry's `.slot - 1` as the 0-based module-inventory `stack`
+  (so a module in slot 2 lands at stack 1). Backward compat: entries that are a
+  legacy bare string, or a `{ name, quality }` table without `.slot`, still work — a
+  running counter assigns sequential slots for entries lacking an explicit `.slot`.
+  All pcall guards and the `defines.inventory.assembling_machine_modules` guard are
+  kept. The `module_counts` collapse and logistic request-filter emission are
+  unchanged in logic.
+- **Fix (BUG 2):** Added `prototypes.is_valid_signal(signal)` — nil → false; legacy
+  string → validated as an item; table by `.type` (item/nil → item lookup, fluid →
+  version-tolerant fluid lookup, virtual → virtual-signal lookup, permissive if
+  unresolvable; any other type → permissive). All prototype reads are pcall-guarded
+  so the helper never throws. `build_gui` now clears `options.item_selection`
+  **silently** (no chat message) when `is_valid_signal` is false, so the GUI opens
+  empty, and wraps the `elem_value` assignment in `pcall` as defense-in-depth.
+- **Tests:** Added a slot-independence test (a lone slot-2 module still yields a
+  request filter and an `items` insert-plan entry at `stack == 1`) and an
+  `is_valid_signal` test (bogus item → false, real item → true, nil → false); both
+  graceful-skip when prototypes are absent.
+- **Undo:** `git revert` the commit tagged `[workitem-16]`.
+- **Report:** `docs/workitems/16-module-slot-and-stale-item-fixes.md`.
 
 ---
 
