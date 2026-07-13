@@ -26,7 +26,7 @@ _Last updated: 2026-07-13_
 | 13  | Run automated tests (including unit tests, integration tests, system tests, simulation tests, etc) every 6 hours and report on the results as a part of this doc. Include test coverage rate (lines, methods, files covered) | Platform Improvement | Medium   | 🟢 Done                       |
 | 14  | Add support for modules.                                                                                                                                                                                                     | New Feature          | Medium   | 🟢 Done                       |
 | 15  | Module picker: allow selecting module quality (higher-quality modules)                                                                                                                                                       | New Feature          | Medium   | 🟢 Done                       |
-| 16  | Fix: independent module slots (don't stop at first empty slot) + crash on opening GUI with a removed/stale item                                                                                                               | Bug                  | High     | 🔵 Needs In-Game Verification |
+| 16  | Fix: independent module slots (don't stop at first empty slot) + crash on opening GUI with a removed/stale item                                                                                                               | Bug                  | High     | 🟢 Done                       |
 
 ---
 
@@ -57,7 +57,7 @@ _Last updated: 2026-07-13_
 - **Fix:** Remove the dead branch (and redundant re-set) for clarity.
 
 ### 16. Modules dropped when an earlier slot is empty + crash opening GUI with a removed item
-- **Status:** 🔵 Needs In-Game Verification
+- **Status:** 🟢 Done — verified in-game 2026-07-13 (modules in any slot subset build correctly; GUI opens cleanly when a previously-chosen item was removed).
 - **Location:** `scripts/gui.lua` (`handle_create_click`, `build_gui`),
   `scripts/blueprint.lua` (`build_blueprint_entities`),
   `scripts/prototypes.lua` (new `is_valid_signal`), `tests/qm-blueprint-tests.lua`.
