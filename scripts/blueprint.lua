@@ -64,13 +64,16 @@ end
 
 -- Constructs the list of blueprint-entity tables for the mall layout, relative to
 -- base_position:
---   - the crafting building (with recipe, recipe_quality, and quick_mall_* tags),
+--   - the crafting building (with recipe, recipe_quality, and quick_mall_* tags;
+--     when module_selections are given it also gets a logistic request for those
+--     modules and a pre-filled module inventory via the blueprint `items` field),
 --   - an input chest with logistic request_filters + a feeding inserter (only when
 --     request_list is non-empty and an input chest is chosen),
 --   - an output chest (with an optional `bar` = stack_limit) + an extracting
 --     inserter (only when an output chest / inserter is chosen).
 -- chest_offset / inserter_offset are horizontal offsets to the west of the
--- building. Each entity gets a sequential entity_number. Returns the entity list.
+-- building. module_selections is a nil-safe slot-indexed array of module item
+-- names. Each entity gets a sequential entity_number. Returns the entity list.
 local function build_blueprint_entities(
   base_position,
   building_name,
@@ -82,12 +85,31 @@ local function build_blueprint_entities(
   inserter_offset,
   request_list,
   quality,
-  stack_limit
+  stack_limit,
+  module_selections
 )
   local entities = {}
   local next_id = 1
   local quality_name = quality or "normal"
   local bar_value = (stack_limit and stack_limit > 0) and stack_limit or nil
+
+  -- Module support (workitem-14): module_selections is a slot-indexed array of
+  -- module item names (nils allowed for empty slots). Collapse it into
+  --   module_counts[name] = number of slots assigned to that module
+  -- and a compact slot list (in original order) so we can (a) build a logistic
+  -- request on the building so bots deliver the modules, and (b) pre-fill the
+  -- building's module inventory in the blueprint entity `items` field.
+  local module_counts = {}
+  local module_slot_names = {}
+  if module_selections then
+    for _, module_name in ipairs(module_selections) do
+      if module_name and module_name ~= "" then
+        module_counts[module_name] = (module_counts[module_name] or 0) + 1
+        table.insert(module_slot_names, module_name)
+      end
+    end
+  end
+  local has_modules = next(module_counts) ~= nil
 
   local request_filters = nil
   if request_list then
@@ -109,7 +131,7 @@ local function build_blueprint_entities(
     table.insert(entities, def)
   end
 
-  add_entity({
+  local building_def = {
     name = building_name,
     position = { x = base_position.x, y = base_position.y },
     direction = defines.direction.north,
@@ -119,7 +141,75 @@ local function build_blueprint_entities(
       quick_mall_recipe = recipe_name,
       quick_mall_recipe_quality = quality_name
     },
-  })
+  }
+
+  if has_modules then
+    -- (a) Logistic request on the BUILDING so bots deliver the modules from the
+    -- network (this is the primary requirement). Same request_filters shape used
+    -- for the input chest below.
+    local module_filters = {}
+    local module_index = 1
+    for module_name, count in pairs(module_counts) do
+      module_filters[module_index] = {
+        index = module_index,
+        name = module_name,
+        count = count,
+        quality = "normal",
+        comparator = "=",
+      }
+      module_index = module_index + 1
+    end
+    building_def.request_filters = {
+      sections = {
+        {
+          index = 1,
+          filters = module_filters,
+        },
+      },
+    }
+
+    -- Record the modules in tags too (informational; not relied on for delivery).
+    building_def.tags.quick_mall_modules = table.concat(module_slot_names, ",")
+
+    -- (b) Complementary: pre-fill the building's module inventory in the blueprint
+    -- `items` field so the ghost visually shows which modules belong in which
+    -- slots. Wrapped in pcall + guarded on the inventory constant so a wrong or
+    -- absent constant can never abort blueprint creation (delivery still works via
+    -- the request above).
+    pcall(function()
+      local module_inventory = defines
+        and defines.inventory
+        and defines.inventory.assembling_machine_modules
+      if module_inventory then
+        local items = {}
+        -- Group the InventoryPositions per module name (stacks are 0-based).
+        local positions_by_name = {}
+        for slot_index, module_name in ipairs(module_slot_names) do
+          local list = positions_by_name[module_name]
+          if not list then
+            list = {}
+            positions_by_name[module_name] = list
+          end
+          table.insert(list, {
+            inventory = module_inventory,
+            stack = slot_index - 1,
+            count = 1,
+          })
+        end
+        for module_name, positions in pairs(positions_by_name) do
+          table.insert(items, {
+            id = { name = module_name, quality = "normal" },
+            items = { in_inventory = positions },
+          })
+        end
+        if #items > 0 then
+          building_def.items = items
+        end
+      end
+    end)
+  end
+
+  add_entity(building_def)
 
   if #request_list > 0 and input_chest then
     add_entity({

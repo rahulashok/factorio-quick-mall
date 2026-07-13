@@ -24,7 +24,7 @@ _Last updated: 2026-07-13_
 | 11  | Document the code                                                                                                                                                                                                            | Optimization         | Low      | 🟢 Done                       |
 | 12  | Break the control.lua file into smaller separate files. This enables future subagents to work indeprendently. Separation of concerns, etc                                                                                    | Optimization         | Medium   | 🟢 Done                       |
 | 13  | Run automated tests (including unit tests, integration tests, system tests, simulation tests, etc) every 6 hours and report on the results as a part of this doc. Include test coverage rate (lines, methods, files covered) | Platform Improvement | Medium   | 🟢 Done                       |
-| 14  | Add support for modules.                                                                                                                                                                                                     | New Feature          | Medium   | 🔴 TODO                       |
+| 14  | Add support for modules.                                                                                                                                                                                                     | New Feature          | Medium   | 🔵 Needs In-Game Verification |
 
 ---
 
@@ -151,6 +151,36 @@ _Last updated: 2026-07-13_
   **Claude Code scheduled job** (durable, in `.claude/scheduled_tasks.json`, every 6
   hours) runs it — deliberately **not** the system crontab. Current run: **8/8 pass**.
   See `docs/workitems/13-automated-test-schedule.md` and the results section below.
+
+---
+
+## New Features
+
+### 14. Add support for modules
+- **Status:** 🔵 Needs In-Game Verification
+- **Location:** `scripts/constants.lua`, `scripts/recipes.lua`, `scripts/blueprint.lua`, `scripts/gui.lua`, `control.lua`.
+- **Need:** Let the player choose modules for the crafting building, respecting the
+  building's module-slot count and which modules are allowed for the building+recipe
+  combo, and have the built building **request those modules from the logistics
+  network**.
+- **Fix:** Added module-compatibility logic to `scripts/recipes.lua`
+  (`get_module_slot_count`, `is_module_allowed`, `get_module_item_prototypes`,
+  `get_allowed_modules`, `invalidate_module_cache` — strict on a module's recipe
+  `limitations`, otherwise permissive-but-safe on `allowed_module_categories` /
+  `allowed_effects`, all pcall-guarded, with a cached module-item scan). Added a
+  "Modules" row to `scripts/gui.lua` `build_gui` using the workitem-10 `add_icon_row`
+  pattern: one `choose-elem-button` (`elem_type = "item"`, `elem_filters` limited to
+  the allowed module names) per slot, seeded from `options.module_selections`; shows
+  "No module slots" when the building has none; re-rendered on building/recipe change.
+  `control.lua`'s `on_gui_elem_changed` records per-slot selections. On build,
+  `build_blueprint_entities` puts a **logistic request** for the selected modules on
+  the building (same `request_filters` sections shape as the input chest) so bots
+  deliver them, plus a defensive (`pcall`-guarded) module-inventory pre-fill via the
+  blueprint `items` field. **Needs in-game verification** — see
+  `docs/workitems/14-add-support-for-modules.md` for the exact checklist (slot count,
+  allowed-module filtering, bot delivery, 2.0 blueprint `request_filters`/`items`
+  shapes on a crafting machine, and the `defines.inventory.assembling_machine_modules`
+  constant).
 
 ---
 

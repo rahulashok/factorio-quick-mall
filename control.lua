@@ -14,7 +14,9 @@
 --     - an output logistic chest (with an optional stack/bar limit) plus an
 --       inserter pulling finished products out.
 --   Chests/inserters are only added when the recipe actually has solid
---   inputs/outputs.
+--   inputs/outputs. The player can also pick modules per module slot of the
+--   crafting building (workitem-14); the built building requests those modules
+--   from the logistics network.
 --
 -- OVERALL FLOW
 --   1. build_gui(player) creates the window and seeds per-player `options` from
@@ -56,6 +58,7 @@
 
 local constants = require("scripts.constants")
 local prototypes = require("scripts.prototypes")
+local recipes = require("scripts.recipes")
 local storage_mod = require("scripts.storage")
 local blueprint = require("scripts.blueprint")
 local gui = require("scripts.gui")
@@ -96,13 +99,16 @@ end
 script.on_init(function()
   -- Reset the derived candidate-building cache (module local, never saved).
   prototypes.invalidate_candidate_cache()
+  recipes.invalidate_module_cache()
   storage_mod.ensure_global()
 end)
 
 script.on_configuration_changed(function(event)
   -- Mod/version changes can add, remove, or alter entity prototypes, so the
-  -- memoized candidate-building set must be rebuilt on next use.
+  -- memoized candidate-building set (and module-item set) must be rebuilt on next
+  -- use.
   prototypes.invalidate_candidate_cache()
+  recipes.invalidate_module_cache()
   storage_mod.ensure_global()
 end)
 
@@ -289,6 +295,28 @@ script.on_event(defines.events.on_gui_elem_changed, function(event)
 
     gui.refresh_building_dropdown(player, name_to_refresh)
     gui.refresh_recipe_buttons(player, name_to_refresh)
+  elseif event.element and event.element.valid
+    and event.element.name:find(constants.GUI_MODULE_PREFIX, 1, true) == 1 then
+    -- Module choose-elem-button changed (workitem-14): record the per-slot module
+    -- name (nil when cleared) in options.module_selections. No re-render is needed
+    -- (the button already shows the new icon); it is read at build time.
+    local storage = storage_mod.get_storage_root()
+    local options = storage and storage.options[player.index]
+    if not options then
+      return
+    end
+
+    local slot = tonumber(event.element.name:sub(#constants.GUI_MODULE_PREFIX + 1))
+    if slot then
+      options.module_selections = options.module_selections or {}
+      local value = event.element.elem_value
+      -- choose-elem-button elem_value for elem_type "item" is the item name
+      -- string (or a table with .name for quality-aware pickers); normalize.
+      if type(value) == "table" then
+        value = value.name
+      end
+      options.module_selections[slot] = value
+    end
   end
 end)
 

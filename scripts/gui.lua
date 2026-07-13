@@ -30,6 +30,8 @@ local GUI_OUTPUT_PREFIX = constants.GUI_OUTPUT_PREFIX
 local GUI_QUALITY_WARNING = constants.GUI_QUALITY_WARNING
 local GUI_CREATE = constants.GUI_CREATE
 local GUI_CLOSE = constants.GUI_CLOSE
+local GUI_MODULE_FLOW = constants.GUI_MODULE_FLOW
+local GUI_MODULE_PREFIX = constants.GUI_MODULE_PREFIX
 local GUI_ICON_COLUMNS = constants.GUI_ICON_COLUMNS
 local GUI_MAX_INLINE_ROWS = constants.GUI_MAX_INLINE_ROWS
 local GUI_OVERFLOW_SCROLL_HEIGHT = constants.GUI_OVERFLOW_SCROLL_HEIGHT
@@ -44,6 +46,8 @@ local get_entity_tile_size = prototypes.get_entity_tile_size
 
 local has_solid_inputs = recipes.has_solid_inputs
 local has_solid_outputs = recipes.has_solid_outputs
+local get_module_slot_count = recipes.get_module_slot_count
+local get_allowed_modules = recipes.get_allowed_modules
 local build_building_options = recipes.build_building_options
 local build_recipe_options = recipes.build_recipe_options
 local recipe_outputs_item = recipes.recipe_outputs_item
@@ -307,6 +311,64 @@ local function render_recipe_buttons(frame, options)
   end
 end
 
+-- Rebuilds the module icon row (workitem-14). Resolves the selected building's
+-- module slot count and the list of modules allowed for the current
+-- building+recipe combo, then renders one `choose-elem-button` (elem_type =
+-- "item") per slot, seeded from options.module_selections and constrained via
+-- `elem_filters` to the allowed module names. Shows a "No module slots" label
+-- when the building has none. Also prunes now-invalid saved selections.
+local function render_module_buttons(frame, options, force)
+  local module_icons = frame and find_child_by_name(frame, GUI_MODULE_FLOW)
+  if not module_icons then
+    return
+  end
+
+  module_icons.clear()
+
+  local building_prototype = resolve_entity_prototype(options.building_selection)
+  local slot_count = get_module_slot_count(building_prototype)
+
+  if slot_count <= 0 then
+    module_icons.add({ type = "label", caption = "No module slots" })
+    -- Clear any stale selections so they aren't carried into the blueprint.
+    options.module_selections = {}
+    return
+  end
+
+  local recipe_name = options.recipes.names[options.recipe_selection_index]
+  local recipe = recipe_name and force.recipes[recipe_name]
+
+  local allowed = get_allowed_modules(force, building_prototype, recipe)
+  -- Build elem_filters restricting the picker to the allowed module names.
+  local elem_filters = {}
+  local allowed_set = {}
+  for _, name in ipairs(allowed) do
+    table.insert(elem_filters, { filter = "name", name = name })
+    allowed_set[name] = true
+  end
+
+  options.module_selections = options.module_selections or {}
+  for slot = 1, slot_count do
+    local saved = options.module_selections[slot]
+    -- Drop a saved selection that is no longer allowed for this combo.
+    if saved and not allowed_set[saved] then
+      saved = nil
+      options.module_selections[slot] = nil
+    end
+
+    local button = module_icons.add({
+      type = "choose-elem-button",
+      name = GUI_MODULE_PREFIX .. slot,
+      elem_type = "item",
+      elem_filters = elem_filters,
+      tooltip = "Choose a module for slot " .. slot .. ".",
+    })
+    if saved then
+      button.elem_value = saved
+    end
+  end
+end
+
 -- === GUI lifecycle ===
 
 -- Destroys the Quick Mall window for the player if it is open.
@@ -344,6 +406,7 @@ local function build_gui(player)
     output_chest_selection = existing_options and existing_options.output_chest_selection,
     stack_limit = existing_options and existing_options.stack_limit or 1,
     inserter_selection = existing_options and existing_options.inserter_selection,
+    module_selections = (existing_options and existing_options.module_selections) or {},
     prototype_resolution_uncertain = false,
     is_initializing = true,
   }
@@ -451,6 +514,10 @@ local function build_gui(player)
     button.toggled = (options.inserter_selection == inserter_name)
   end
 
+  -- Module row (workitem-14): one choose-elem-button per module slot of the
+  -- selected building, rendered by render_module_buttons after the frame exists.
+  add_icon_row(content, "Modules: ", GUI_MODULE_FLOW)
+
   local warning_label = content.add({
     type = "label",
     name = GUI_QUALITY_WARNING,
@@ -502,6 +569,8 @@ local function build_gui(player)
       end
     end
   end
+
+  render_module_buttons(frame, options, player.force)
 end
 
 -- Recomputes the building options for the (possibly new) item, keeping the prior
@@ -571,6 +640,7 @@ local function refresh_recipe_buttons(player, item_name)
   render_input_chest_buttons(frame, options, player.force)
   render_output_chest_buttons(frame, options, player.force)
   render_stack_limit_ui(frame, options, player.force)
+  render_module_buttons(frame, options, player.force)
 end
 
 -- Handles the "Build Quick Mall" button. Reads the chosen item/quality and the
@@ -691,6 +761,24 @@ local function handle_create_click(player)
   local inserter_offset = half_width + 1
   local chest_offset = half_width + 2
 
+  -- Module support (workitem-14): gather the per-slot module names, capped at the
+  -- building's real slot count and filtered to those still allowed for the final
+  -- recipe (so a stale selection from a different recipe/building is dropped).
+  local module_selections = {}
+  local slot_count = get_module_slot_count(building_prototype)
+  if slot_count > 0 and options.module_selections then
+    local allowed_set = {}
+    for _, name in ipairs(get_allowed_modules(player.force, building_prototype, recipe)) do
+      allowed_set[name] = true
+    end
+    for slot = 1, slot_count do
+      local module_name = options.module_selections[slot]
+      if module_name and allowed_set[module_name] then
+        module_selections[slot] = module_name
+      end
+    end
+  end
+
   local entities = build_blueprint_entities(
     { x = 0, y = 0 },
     building_name,
@@ -702,7 +790,8 @@ local function handle_create_click(player)
     inserter_offset,
     request_list,
     quality_name,
-    options.stack_limit
+    options.stack_limit,
+    module_selections
   )
   if not give_blueprint_cursor(player, entities, request_list) then
     player.print("Quick Mall: unable to create blueprint. Clear your cursor and try again.")
@@ -721,6 +810,7 @@ return {
   render_output_chest_buttons = render_output_chest_buttons,
   render_stack_limit_ui = render_stack_limit_ui,
   render_recipe_buttons = render_recipe_buttons,
+  render_module_buttons = render_module_buttons,
   destroy_gui = destroy_gui,
   build_gui = build_gui,
   refresh_building_dropdown = refresh_building_dropdown,

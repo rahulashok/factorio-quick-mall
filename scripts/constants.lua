@@ -25,6 +25,11 @@ local GUI_OUTPUT_PREFIX = "quick-mall-output-"
 local GUI_QUALITY_WARNING = "quick-mall-quality-warning"
 local GUI_CREATE = "quick-mall-create"
 local GUI_CLOSE = "quick-mall-close"
+-- Module row (workitem-14): a wrapping icon-row table holding one
+-- choose-elem-button per module slot of the selected building. Per-slot buttons
+-- are named GUI_MODULE_PREFIX .. slot index (1-based).
+local GUI_MODULE_FLOW = "quick-mall-module-flow"
+local GUI_MODULE_PREFIX = "quick-mall-module-"
 
 -- Icon-row layout limits (workitem-10). Icon containers are `table`s that wrap
 -- their sprite-buttons into rows of GUI_ICON_COLUMNS. When a row would need more
@@ -129,6 +134,8 @@ return {
   GUI_QUALITY_WARNING = GUI_QUALITY_WARNING,
   GUI_CREATE = GUI_CREATE,
   GUI_CLOSE = GUI_CLOSE,
+  GUI_MODULE_FLOW = GUI_MODULE_FLOW,
+  GUI_MODULE_PREFIX = GUI_MODULE_PREFIX,
   GUI_ICON_COLUMNS = GUI_ICON_COLUMNS,
   GUI_MAX_INLINE_ROWS = GUI_MAX_INLINE_ROWS,
   GUI_OVERFLOW_SCROLL_HEIGHT = GUI_OVERFLOW_SCROLL_HEIGHT,
