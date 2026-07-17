@@ -28,10 +28,16 @@ grep -nE '^\| *[0-9]+ ' docs/TASKS.md | grep '🔴'
 ```
 
 Ignore the status *legend* line (line ~6) and any row whose Status cell has no 🔴
-(i.e. 🟢 Done, ⚪ Won't Do, 🟡 without 🔴, or 🔵). A **reopened** item (🔴 plus text
-like "Reopened") is open — read its detail section AND its `docs/workitems/NN-*.md`
-report, which may contain new failure information ("User feedback" / "In-game testing
-failed") explaining why the prior fix was insufficient. Use that to drive the new fix.
+(i.e. 🟢 Done, ⚪ Won't Do, 🟡 without 🔴, 🔵, or **🟠 Proposed**). A **reopened** item
+(🔴 plus text like "Reopened") is open — read its detail section AND its
+`docs/workitems/NN-*.md` report, which may contain new failure information
+("User feedback" / "In-game testing failed") explaining why the prior fix was
+insufficient. Use that to drive the new fix.
+
+**🟠 Proposed rows are NOT actionable.** They are candidate tasks auto-triaged from
+GitHub issues by the `watch-issues` skill and are awaiting human review. This runner acts
+ONLY on 🔴. A human approves a proposal by editing its status **🟠 → 🔴**; only then does
+it become actionable here. Do not widen the match to include 🟠.
 
 **If no numbered row contains 🔴, do nothing and stop.** This is the normal case.
 

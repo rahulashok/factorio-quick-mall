@@ -3,7 +3,7 @@
 Tracks bugs, optimizations, and cleanups found during code review.
 Update the **Status** column as work progresses.
 
-**Status legend:** 🔴 Todo · 🟡 In Progress · 🟢 Done · ⚪ Won't Do · 🔵 Needs In-Game Verification
+**Status legend:** 🔴 Todo · 🟡 In Progress · 🟢 Done · ⚪ Won't Do · 🔵 Needs In-Game Verification · 🟠 Proposed (from a GitHub issue — awaiting review; flip to 🔴 to approve)
 
 _Last updated: 2026-07-13_
 

@@ -17,4 +17,9 @@ commits it tagged `[workitem-NN]`.
 - **The procedure lives in `.claude/skills/process-tasks/SKILL.md`** (source of truth).
 - Run it manually anytime with `/process-tasks`.
 - A second cron job (`13 */6 * * *`) runs `scripts/run_tests.sh` for workitem #13.
+- A third cron job (hourly) runs the **`watch-issues`** skill
+  (`.claude/skills/watch-issues/SKILL.md`, or `/watch-issues`), which triages new GitHub
+  issues into **🟠 Proposed** rows in `docs/TASKS.md` for review. Proposals are NOT
+  auto-implemented — a human flips 🟠 → 🔴 to approve, and only then does `process-tasks`
+  pick them up.
 - Cron recurring jobs auto-expire after 7 days — re-create them if they lapse.
